@@ -55,6 +55,10 @@ jlmomp = 'n' , 'y'
 #astro = 'y'
 astro = 'n', 'y'
 
+#epr = 50
+#gpr = 34
+#spr = 70
+
 preequilibrium = 'y'
 fileresidual = 'y'
 outlevels = 'y'
@@ -320,6 +324,10 @@ def run_main(user_input):
 					talys_input2.pop('mass')
 					outfile.write('energy %s \n \n' %talys_input2.pop('energy_file'))
 
+					talys_input2.pop('E1')
+					talys_input2.pop('E2')
+					talys_input2.pop('step')
+
 					for key, value in talys_input2.iteritems():
 						outfile.write('%s %s \n' %(key, str(value)))
 
@@ -336,6 +344,11 @@ def run_main(user_input):
 					shutil.move(src2, dst2)
 
 					#print input_file
+
+					print dst2
+
+					f = open('%s/input.txt' %(dst2), 'r')
+					print f.read()
 
 					## run TALYS
 					with cd('%s' %(dst2)):
