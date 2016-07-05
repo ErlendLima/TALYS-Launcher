@@ -23,37 +23,37 @@ energy_file = 'energies.txt'
 #element = 'Ge', 'Fe', 'Kg'
 #element = ['Fe', 'Co', 'Kg']
 
-element = 'Fe', 'Co', 'Ni', 'Ge'
+element = 'Ce'
 
 projectile = 'n'
 
 #mass = 76
-mass = 87, 99, 198
+mass = 160, 162
 #mass = 86, 87, 88, 110, 300, 241
 
-massmodel = 3, 4
+massmodel = 3
 #massmodel = 1, 2, 3
 
-ldmodel = 2, 3
+ldmodel = 3
 #ldmodel = 2, 3, 1
 #ldmodel = 1, 2, 3, 4
 
-strength = 1, 4
+strength = 1
 #strength = 1, 2, 3, 4
 
 gnorm = 1.
 
-localomp = 'y', 'n'
+localomp = 'y'
 #localomp = ['n', 'y']
 
-#jlmomp = 'n'
-jlmomp = 'n' , 'y'
+jlmomp = 'y'
+#jlmomp = 'n' , 'y'
 #jlmomp = ['y', 'n']
 #jlmomp = ['y', 'h']
 
 
 #astro = 'y'
-astro = 'n', 'y'
+astro = 'n'
 
 #epr = 50
 #gpr = 34
@@ -138,12 +138,6 @@ class cd:
 
 
 
-## wtf no doc
-def run_talys(src, input_file, output_file):
-	with cd('%s' %(src)):
-		os.system('talys <%s> %s' %(input_file, output_file))
-
-
 
 ## OK+ a little more doc
 def correct(input_argument):
@@ -162,18 +156,18 @@ def correct(input_argument):
 		error_message = " please make sure these input arguments are gives as: \n input = 'no' or input = 'yes' \n input = 'n'  or input = 'y' \n input = ['no', 'yes'] or input = ['n', 'y'] \n"
 		sys.exit(error_message)
 
-Z_nr = {'H':'01',   'He':'02',  'Li':'03',   'Be':'04',  'B':'05',    'C':'06',    'N':'07',    'O':'08',   'F':'09',   'Ne':'10', 
-		'Na':'11',  'Mg':'12',  'Al':'13',   'Si':'14',  'P':'15',    'S':'16',    'Cl':'17',   'Ar':'18',  'K':'19',   'Ca':'20', 
-		'Sc':'21',  'Ti':'22',  'V':'23',    'Cr':'24',  'Mn':'25',   'Fe':'26',   'Co':'27',   'Ni':'28',  'Cu':'29',  'Zn':'30', 
-		'Ga':'31',  'Ge':'32',  'As':'33',   'Se':'34',  'Br':'35',   'Kr':'36',   'Rb':'37',   'Sr':'38',  'Y':'39',   'Zr':'40', 
-		'Nb':'41',  'Mo':'42',  'Tc':'43',   'Ru':'44',  'Rh':'45',   'Pd':'46',   'Ag':'47',   'Cd':'48',  'In':'49',  'Sn':'50', 
-		'Sb':'51',  'Te':'52',  'I':'53',    'Xe':'54',  'Cs':'55',   'Ba':'56',   'La':'57',   'Ce':'58',  'Pr':'59',  'Nd':'60', 
-		'Pm':'61',  'Sm':'62',  'Eu':'63',   'Gd':'64',  'Tb':'65',   'Dy':'66',   'Ho':'67',   'Er':'68',  'Tm':'69',  'Yb':'70', 
-		'Lu':'71',  'Hf':'72',  'Ta':'73',   'W':'74',   'Re':'75',   'Os':'76',   'Ir':'77',   'Pt':'78',  'Au':'79',  'Hg':'80', 
-		'Tl':'81',  'Pb':'82',  'Bi':'83',   'Po':'84',  'At':'85',   'Rn':'86',   'Fr':'87',   'Ra':'88',  'Ac':'89',  'Th':'90', 
-		'Pa':'91',  'U':'92',   'Np':'93',   'Pu':'94',  'Am':'95',   'Cm':'96',   'Bk':'97',   'Cf':'98',  'Es':'99',  'Fm':'100', 
-		'Md':'101', 'No':'102', 'Lr':'103',  'Rf':'104', 'Db':'105',  'Sg':'106',  'Bh':'107',  'Hs':'108', 'Mt':'109', 'Ds':'110', 
-		'Rg':'111', 'Cn':'112', 'Uut':'113', 'Fl':'114', 'Uup':'115', 'Lv':'116',  'Uus':'117', 'Uuo':'118'}
+Z_nr = {'H':'001',  'He':'002', 'Li':'003',  'Be':'004', 'B':'005',   'C':'006',  'N':'007',   'O':'008',  'F':'009',  'Ne':'010', 
+		'Na':'011', 'Mg':'012', 'Al':'013',  'Si':'014', 'P':'015',   'S':'016',  'Cl':'017',  'Ar':'018', 'K':'019',  'Ca':'020', 
+		'Sc':'021', 'Ti':'022', 'V':'023',   'Cr':'024', 'Mn':'025',  'Fe':'026', 'Co':'027',  'Ni':'028', 'Cu':'029', 'Zn':'030', 
+		'Ga':'031', 'Ge':'032', 'As':'033',  'Se':'034', 'Br':'035',  'Kr':'036', 'Rb':'037',  'Sr':'038', 'Y':'039',  'Zr':'040', 
+		'Nb':'041', 'Mo':'042', 'Tc':'043',  'Ru':'044', 'Rh':'045',  'Pd':'046', 'Ag':'047',  'Cd':'048', 'In':'049', 'Sn':'050', 
+		'Sb':'051', 'Te':'052', 'I':'053',   'Xe':'054', 'Cs':'055',  'Ba':'056', 'La':'057',  'Ce':'058', 'Pr':'059', 'Nd':'060', 
+		'Pm':'061', 'Sm':'062', 'Eu':'063',  'Gd':'064', 'Tb':'065',  'Dy':'066', 'Ho':'067',  'Er':'068', 'Tm':'069', 'Yb':'070', 
+		'Lu':'071', 'Hf':'072', 'Ta':'073',  'W':'074',  'Re':'075',  'Os':'076', 'Ir':'077',  'Pt':'078', 'Au':'079', 'Hg':'080', 
+		'Tl':'081', 'Pb':'082', 'Bi':'083',  'Po':'084', 'At':'085',  'Rn':'086', 'Fr':'087',  'Ra':'088', 'Ac':'089', 'Th':'090', 
+		'Pa':'091', 'U':'092',  'Np':'093',  'Pu':'094', 'Am':'095',  'Cm':'096', 'Bk':'097',  'Cf':'098', 'Es':'099', 'Fm':'100', 
+		'Md':'101', 'No':'102', 'Lr':'103',  'Rf':'104', 'Db':'105',  'Sg':'106', 'Bh':'107',  'Hs':'108', 'Mt':'109', 'Ds':'110', 
+		'Rg':'111', 'Cn':'112', 'Uut':'113', 'Fl':'114', 'Uup':'115', 'Lv':'116', 'Uus':'117', 'Uuo':'118'}
 
 def run_talys(src, input_file, output_file):
 	with cd('%s' %(src)):
@@ -181,7 +175,6 @@ def run_talys(src, input_file, output_file):
 
 
 def run_main(user_input):
-	#print user_input
 
 	talys_input = {}
 
@@ -194,14 +187,10 @@ def run_main(user_input):
 			## put single input noe iterable into talys_input
 			talys_input[key] = user_input[key]
 			## put single entries into list if iterable variable
-			#print user_input[key]
 			user_input[key] = [user_input[key]]
-			#print user_input[key]
 		else:
 			pass
 
-
-	#print talys_input
 	## mkdir: > TALYS-calculations-date-time
 	date_directory = time.strftime('%y%m%d')
 	time_directory = time.strftime('%H%M%S')
@@ -212,12 +201,13 @@ def run_main(user_input):
 	info_file = '%s-info.txt' %top_directory
 	date_file = time.strftime('%d %B %Y')
 	time_file = time.strftime('%H:%M:%S-%Z')
-	#print time.strftime('%I-%p')
+
 	outfile_info = open(info_file, 'w')
 	info_input = dict(user_input)
-	## write date and time to info_file
+
+	## write date, time and input info to info_file
 	outfile_info.write('TALYS-calculations')
-	#print 'hallo', info_input
+
 	outfile_info.write('\nDate: %s' %date_file)
 	outfile_info.write('\nTime: %s' %time_file)
 	outfile_info.write('\n\n# name of energy file: %s' %info_input['energy_file'])
@@ -228,7 +218,6 @@ def run_main(user_input):
 	outfile_info.write('\n\n# name of input file: %s' %info_input.pop('input_file'))
 	outfile_info.write('\n# name of output file: %s' %info_input.pop('output_file'))
 	outfile_info.write('\n\nVariable input:') 
-	print info_input['element'][0]
 	outfile_info.write('\nelement: %s' %str(info_input.pop('element')))
 	outfile_info.write('\nprojectile: %s' %str(info_input.pop('projectile')))
 	outfile_info.write('\nmass: %s' %str(info_input.pop('mass')))
@@ -342,6 +331,8 @@ def run_main(user_input):
 					for key, value in talys_input2.iteritems():
 						outfile.write('%s %s \n' %(key, str(value)))
 
+					outfile.close()
+
 					## Move energy file and input file to isotope directory
 					## new src energy file
 					src_new = '%s/%s' %(top_directory, src_energy)
@@ -354,16 +345,20 @@ def run_main(user_input):
 					## move input file to variable directory
 					shutil.move(src2, dst2)
 
-					#print input_file
-
-					print dst2
-
-					f = open('%s/input.txt' %(dst2), 'r')
-					print f.read()
-
 					## run TALYS
 					with cd('%s' %(dst2)):
 						os.system('talys <%s> %s' %(input_file, output_file))
+
+					## move result file to TALYS-calculations-date-time/original_data/astro-a/ZZ-X/isotope
+					src_result_file = '%s/rp%s%s.tot' %(dst2, Z_nr[e], m+1)
+					dst_result_file = '%s/%s%s-rp%s%s-0%g-0%g-0%g-%s-%s.tot' %(isotope_results, m, e, Z_nr[e], m+1, mm, lm, s, l, j)
+					#dst_result_file = '%s/%s%s-rp%s%s-0%g-0%g-0%g.tot' %(isotope_results, m, e, Z_nr[e], m+1, s, l, j)
+					#hallo = '-0%g-0%g-0%g-%s-%s' %(mm, lm, s, l, j)
+					shutil.copy(src_result_file, dst_result_file)
+					print variable_directory
+					#print src_result_file
+					#print dst_result_file
+					#print hallo
 
 
 
