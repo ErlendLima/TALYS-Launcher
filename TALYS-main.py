@@ -28,7 +28,7 @@ element = 'Ce'
 projectile = 'n'
 
 #mass = 76
-mass = 635, 674, 7263, 879, 637, 160, 162
+mass = 156, 158, 160, 162, 163, 164
 #mass = 86, 87, 88, 110, 300, 241
 
 massmodel = 3
@@ -46,7 +46,7 @@ gnorm = 1.
 localomp = 'y'
 #localomp = ['n', 'y']
 
-jlmomp = 'y'
+#jlmomp = 'y'
 #jlmomp = 'n' , 'y'
 #jlmomp = ['y', 'n']
 #jlmomp = ['y', 'h']
@@ -294,9 +294,20 @@ def run_main(user_input):
 				isotope_results = '%s/%g%s' %(element_results, m, e)
 				os.makedirs(isotope_results)
 
-				for mm, lm, s, l, j in product(user_input['massmodel'], user_input['ldmodel'], user_input['strength'], user_input['localomp'], user_input['jlmomp']):
+				for mm, lm, s, l in product(user_input['massmodel'], user_input['ldmodel'], user_input['strength'], user_input['localomp']):
 
-					talys_input['massmodel'], talys_input['ldmodel'], talys_input['strength'], talys_input['localomp'], talys_input['jlmomp'] = mm, lm, s, l, j
+					talys_input['massmodel'], talys_input['ldmodel'], talys_input['strength'], talys_input['localomp'] = mm, lm, s, l
+
+					## because default for localomp(l) and jlmomp(j)
+					if l == 'n':
+						j = 'n'
+					
+					elif l == 'y':
+						j = 'y'
+
+					else:
+						print user_input['localomp']
+						sys.exit('problem with localomp/jlmomp')
 
 					### mkdir: > TALYS-calculations-date-time/original_data/astro-a/ZZ-X/isotope/isotope-massmodel-ldmodel-strength-localomp-jlmomp
 					variable_directory = '%s/%g%s-0%g-0%g-0%g-%s-%s' %(isotope_original, m, e, mm, lm, s, l, j)
