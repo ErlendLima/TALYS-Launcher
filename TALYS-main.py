@@ -28,7 +28,7 @@ element = 'Ce'
 projectile = 'n'
 
 #mass = 76
-mass = 160, 162
+mass = 635, 674, 7263, 879, 637, 160, 162
 #mass = 86, 87, 88, 110, 300, 241
 
 massmodel = 3
@@ -349,16 +349,54 @@ def run_main(user_input):
 					with cd('%s' %(dst2)):
 						os.system('talys <%s> %s' %(input_file, output_file))
 
+
+					#error_input = open(src_error)
+					#lines = src_error.readlines()
+
+
+					#error_file.close()
+
 					## move result file to TALYS-calculations-date-time/original_data/astro-a/ZZ-X/isotope
 					src_result_file = '%s/rp%s%s.tot' %(dst2, Z_nr[e], m+1)
 					dst_result_file = '%s/%s%s-rp%s%s-0%g-0%g-0%g-%s-%s.tot' %(isotope_results, m, e, Z_nr[e], m+1, mm, lm, s, l, j)
-					#dst_result_file = '%s/%s%s-rp%s%s-0%g-0%g-0%g.tot' %(isotope_results, m, e, Z_nr[e], m+1, s, l, j)
-					#hallo = '-0%g-0%g-0%g-%s-%s' %(mm, lm, s, l, j)
-					shutil.copy(src_result_file, dst_result_file)
-					print variable_directory
-					#print src_result_file
-					#print dst_result_file
-					#print hallo
+
+					try:
+						shutil.copy(src_result_file, dst_result_file)
+
+					except IOError:
+
+						error_directory = '%s/error' %top_directory
+						if not os.path.exists(error_directory):
+							os.makedirs(error_directory)
+							## put head of error file here?
+						else:
+							pass
+
+						error_file = '%s/%s-error.txt' %(top_directory, Z_nr[e])
+	
+						error_outfile = open('%s/Z%s%s-error.txt' %(error_directory, Z_nr[e], e), 'a+')
+						error_outfile.write('%s\n' %isotope_results)
+
+						## write talys output.txt to error file:
+						src_error = '%s/output.txt' %dst2
+						error_talys = open(src_error, 'r')
+						error_lines = error_talys.readlines()
+						#print str(error_lines)
+
+						#print error_lines
+
+						error_outfile.write('Talys output file: \n')
+						error_outfile.writelines(str(error_lines))
+						error_outfile.write('\n\n')
+
+						error_talys.close()
+						error_outfile.close()
+
+						
+
+					print src_result_file
+					#print src_error
+
 
 
 
