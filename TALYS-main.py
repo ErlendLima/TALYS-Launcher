@@ -29,22 +29,22 @@ projectile = 'n'
 
 #mass = 76
 mass = {'Ce': [156, 160, 158, 160, 162, 163, 164],
-        'Pr':[158, 163]}
+        'Pr':[158, 163, 160]}
 #mass = 86, 87, 88, 110, 300, 241
 
 massmodel = 3
 #massmodel = 1, 2, 3
 
-ldmodel = 3
+ldmodel = 3, 3
 #ldmodel = 2, 3, 1
 #ldmodel = 1, 2, 3, 4
 
-strength = 1
+strength = 1, 2
 #strength = 1, 2, 3, 4
 
 gnorm = 1.
 
-optical = ['localomp n', 'jlmomop y']
+optical = 'localomp n', 'jlmomop y'
 
 
 #localomp = ['n', 'y']
@@ -179,11 +179,9 @@ def run_talys(src, input_file, output_file):
 
 def run_main(user_input):
 
-	print user_input
-
 	talys_input = {}
 
-	## make sure input given are iterable
+	### make sure input given are iterable
 	## if not, put into list
 	
 	for key in user_input:
@@ -195,6 +193,38 @@ def run_main(user_input):
 			user_input[key] = [user_input[key]]
 		else:
 			pass
+
+	## #check if every item in user given list is unique
+	for key, value in user_input.iteritems():
+
+		try:
+			## if variable tuple or list => new list with value only once
+			if len(set(value)) != len(value):
+				newlist = []
+				for val in value:
+					if val not in newlist:
+						newlist.append(val)
+				user_input[key] = newlist
+			
+			else:
+				pass
+		
+		except TypeError:
+			## if variable == dict => new dict with value only once inside user_input[key]
+			for keys, values in value[0].iteritems():
+				if len(set(values)) != len(values):
+					newlist = []
+					for val in values:
+						if val not in newlist:
+							newlist.append(val)
+					value[0][keys] = newlist
+
+				user_input[key] = value[0]
+
+			else:
+				pass
+
+
 
 	## mkdir: > TALYS-calculations-date-time
 	date_directory = time.strftime('%y%m%d')
@@ -251,9 +281,9 @@ def run_main(user_input):
 	## > TALYS-calculations-date-time
 	src_energy = user_input['energy_file'][0]
 	src_info = info_file
-	dst = top_directory
-	shutil.move(src_energy, dst)
-	shutil.move(src_info, dst)
+	dst_energy_info = top_directory
+	shutil.move(src_energy, dst_energy_info)
+	shutil.move(src_info, dst_energy_info)
 
 	## mkdir: > TALYS-calculations-date-time/original_data
 	original_data = '%s/original_data' %top_directory
@@ -287,29 +317,36 @@ def run_main(user_input):
 			element_results = '%s/Z%s-%s' %(astro_results, Z_nr[e], e)
 			os.makedirs(element_results)
 
-			for m in user_input['mass'][0][e]:
+#
+
+			for m in user_input['mass'][e]:
 
 				talys_input['mass'] = m
 
 				## mkdir: > TALYS-calculations-date-time/original_data/astro-a/ZZ-X/isotope
 				isotope_original = '%s/%g%s' %(element_original, m, e)
-				os.makedirs(isotope_original)
+				if not os.path.exists(isotope_original):
+					os.makedirs(isotope_original)
+				else:
+					pass
 
 				## mkdir: > TALYS-calculations-date-time/result_data/astro-a/ZZ-X/isotope
 				isotope_results = '%s/%g%s' %(element_results, m, e)
-				os.makedirs(isotope_results)
+				if not os.path.exists(isotope_results):
+					os.makedirs(isotope_results)
+				else:
+					pass
 
 				#localomp_jlmomp_pairs = [['n', None], [None, 'y']]
 				
 				for mm, lm, s, o in product(user_input['massmodel'], user_input['ldmodel'], user_input['strength'], user_input['optical']):
 
-					print o
-
 					### split optical input into TALYS variable and value
 					optical_name = o.split(' ')[0]
 					optical_value = o.split(' ')[1]
 
-					talys_input['massmodel'], talys_input['ldmodel'], talys_input['strength'], talys_input[optical_name] = mm, lm, s, optical_value
+					#talys_input['massmodel'], talys_input['ldmodel'], talys_input['strength'], talys_input[optical_name] = mm, lm, s, optical_value
+					talys_input['massmodel'], talys_input['ldmodel'], talys_input['strength'] = mm, lm, s
 
 					### mkdir: > TALYS-calculations-date-time/original_data/astro-a/ZZ-X/isotope/isotope-massmodel-ldmodel-strength-localomp-jlmomp
 					variable_directory = '%s/%g%s-0%g-0%g-0%g-%s-%s' %(isotope_original, m, e, mm, lm, s, optical_name, optical_value)
@@ -318,61 +355,56 @@ def run_main(user_input):
 					### make input file
 					## copy of input_dictionary => able to delete items and iterate over the rest
 					talys_input2 = dict(talys_input)
-					print 'talys input', talys_input
-					## need projectile twice
+					## need projectile, input_file, output_file twice
 					projectile = talys_input2.pop(['projectile'][0])
 					input_file = talys_input2.pop('input_file')
 					output_file = talys_input2.pop('output_file')
 					
 					## make header
-					outfile = open(user_input['input_file'][0], 'w') # create input file
-					outfile.write('###################### \n')
-					outfile.write('## TALYS input file ## \n')
-					outfile.write('##  %s%s(%s,g)%s%s   ## \n' %(m, e, projectile, m+1, e))
-					outfile.write('###################### \n \n')
-					outfile.write('# All keywords are explained in README. \n \n')
+					outfile_input = open(user_input['input_file'][0], 'w') # create input file
+					outfile_input.write('###################### \n')
+					outfile_input.write('## TALYS input file ## \n')
+					outfile_input.write('##  %s%s(%s,g)%s%s   ## \n' %(m, e, projectile, m+1, e))
+					outfile_input.write('###################### \n \n')
+					outfile_input.write('# All keywords are explained in README. \n \n')
 
-					outfile.write('element %s \n' %talys_input2.pop('element'))
-					outfile.write('projectile %s \n' %projectile)
-					outfile.write('mass %s \n' %m)
+					outfile_input.write('element %s \n' %talys_input2.pop('element'))
+					outfile_input.write('projectile %s \n' %projectile)
+					outfile_input.write('mass %s \n' %m)
 					talys_input2.pop('mass')
-					outfile.write('energy %s \n \n' %talys_input2.pop('energy_file'))
+					outfile_input.write('energy %s \n \n' %talys_input2.pop('energy_file'))
+					outfile_input.write('%s\n' %o)
 
 					talys_input2.pop('E1')
 					talys_input2.pop('E2')
 					talys_input2.pop('step')
 
 					for key, value in talys_input2.iteritems():
-						outfile.write('%s %s \n' %(key, str(value)))
-						print key, value
+						outfile_input.write('%s %s \n' %(key, str(value)))
 
-					outfile.close()
+					outfile_input.close()
 
 					## Move energy file and input file to isotope directory
 					## new src energy file
-					src_new = '%s/%s' %(top_directory, src_energy)
+					src_energy_new = '%s/%s' %(top_directory, src_energy)
 					## src input file
-					src2 = user_input['input_file'][0]
-					## dst variable directory
-					dst2 = variable_directory
+					src_input = user_input['input_file'][0]
+					## dst input file > variable directory
+					dst_energy_input = variable_directory
+					
 					## copy energy file to variable directory
-					shutil.copy(src_new, dst2)
+					shutil.copy(src_energy_new, dst_energy_input)
+
+
 					## move input file to variable directory
-					shutil.move(src2, dst2)
+					shutil.move(src_input, dst_energy_input)
 
 					## run TALYS
-					with cd('%s' %(dst2)):
+					with cd('%s' %(dst_energy_input)):
 						os.system('talys <%s> %s' %(input_file, output_file))
 
-
-					#error_input = open(src_error)
-					#lines = src_error.readlines()
-
-
-					#error_file.close()
-
 					## move result file to TALYS-calculations-date-time/original_data/astro-a/ZZ-X/isotope
-					src_result_file = '%s/rp%s%s.tot' %(dst2, Z_nr[e], m+1)
+					src_result_file = '%s/rp%s%s.tot' %(dst_energy_input, Z_nr[e], m+1)
 					dst_result_file = '%s/%s%s-rp%s%s-0%g-0%g-0%g-%s-%s.tot' %(isotope_results, m, e, Z_nr[e], m+1, mm, lm, s, optical_name, optical_value)
 
 					try:
@@ -393,12 +425,9 @@ def run_main(user_input):
 						error_outfile.write('%s\n' %isotope_results)
 
 						## write talys output.txt to error file:
-						src_error = '%s/output.txt' %dst2
+						src_error = '%s/output.txt' %dst_energy_input
 						error_talys = open(src_error, 'r')
 						error_lines = error_talys.readlines()
-						#print str(error_lines)
-
-						#print error_lines
 
 						error_outfile.write('Talys output file: \n')
 						error_outfile.writelines(str(error_lines))
@@ -407,10 +436,8 @@ def run_main(user_input):
 						error_talys.close()
 						error_outfile.close()
 
-						
+					print 'variable directory =', variable_directory
 
-					print src_result_file
-					#print src_error
 
 
 
