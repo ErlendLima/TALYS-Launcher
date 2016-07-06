@@ -44,7 +44,7 @@ strength = 1, 2
 
 gnorm = 1.
 
-optical = 'localomp n', 'jlmomop y'
+optical = 'localomp n', 'jlmomp y'
 
 
 #localomp = ['n', 'y']
