@@ -26,13 +26,13 @@ The syntax for the script is
 python getd.py inputfile library
 """
 
-import requests, sys, bs4, re, argparse
+import requests, sys, bs4, re, argparse, os, time
 
 ## GLOBAL VARIABLES
 address_search = "https://groups.nscl.msu.edu/jina/reaclib/db/"
 address_data = "https://groups.nscl.msu.edu/jina/reaclib/db/flatfile.php?rateindex={}&flattype=4"
 address_bruslib = "http://www.astro.ulb.ac.be/bruslib/cgi/reacRate.cgi?nameofNOPReacRates={}&nameofNONReacRates={}&SubmitMess=Submit&PchosenIdx=0&NchosenIdx=0"
-
+address_bruslib_data = "http://www.astro.ulb.ac.be/bruslib/"
 
 ## FUNCTIONS
 
@@ -107,7 +107,16 @@ def scrape(address):
             return None
     return res
 
-    
+
+def change_directory(library):
+    """ Creates and moves working directory to decrease clutter """
+    date_dir = time.strftime('%y%m%d')
+    time_dir = time.strftime('%H%M%S')
+    directory = "{}-reaction-rates-{}-{}".format(library, date_dir, time_dir)
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+    os.chdir(directory)
+
 def get_REACLIB(reactions):
     """ Get data from REACLIB. Finds the rateindex and uses it to download the
     data """
@@ -129,7 +138,7 @@ def get_REACLIB(reactions):
         # Get the data
         print("Found the rate index. Attempting to download data")
         link = address_data.format(rateindex.group(1))
-        filename = "{}_reaclib.txt".format(reaction)
+        filename = "{}_reaclib.txt".format(reaction[:-5])
         if not save_data(filename, link):
             continue
 
@@ -149,7 +158,7 @@ def get_BRUSLIB(reactions):
         # Look for the link to the data
         write("Looking for link...")
         soup = bs4.BeautifulSoup(res.text, "html.parser")
-        link_to_data = "http://www.astro.ulb.ac.be/bruslib/"
+        link_to_data = address_bruslib_data
         for link in soup.findAll('a'):
             if link.contents[0] == "data for Neutron Reaction Rates":
                 link_to_data += link.get('href')[2:]
@@ -171,8 +180,11 @@ if __name__ == "__main__":
     args = parser.parse_args()
     reactions = read_file(args.input)
     if args.database == "REACLIB":
+        change_directory("REACLIB")
         get_REACLIB(reactions[0])
     elif args.database == "BRUSLIB":
+        change_directory("BRUSLIB")
         get_BRUSLIB(reactions[1])
     else:
         print("Expected file argument: getd.py reactions.txt")
+    os.chdir("..")
