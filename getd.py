@@ -9,13 +9,11 @@ if the websites are either updated or suddenly uses another format for their
 URLs. Hopefully, the script is simple enough to change should the need arise.
 
 For input, the script requires a file containing the reactions for which data
-shall be retrieved. The format is either SYMBOL NUMBER REACTION-PROCESS or
-#PROTONS SYMBOL #NEUTRONS. Examples for the first are fe67(n,g) and tb167(ng),
-while an example for the second is 26fe41. The file should look like
+shall be retrieved. The format is #PROTONS SYMBOL #NEUTRONS. In addition
+to this, a range can be specified by adding the terminative value at the end, such as fe67(ng) 71
+or 26fe41 45. The file should look like
 
-fe67(n,g)
-eu159(n,g)
-tb167(n,g)
+63eu96 103
 26fe41
 
 NOTE: In order to use BRUSLIB, the second format must be used, while REACLIB
@@ -32,11 +30,18 @@ import requests, sys, bs4, re, argparse
 
 ## GLOBAL VARIABLES
 address_search = "https://groups.nscl.msu.edu/jina/reaclib/db/"
-address_data = "https://groups.nscl.msu.edu/jina/reaclib/db/flatfile.php?rateindex="
+address_data = "https://groups.nscl.msu.edu/jina/reaclib/db/flatfile.php?rateindex={}&flattype=4"
 address_bruslib = "http://www.astro.ulb.ac.be/bruslib/cgi/reacRate.cgi?nameofNOPReacRates={}&nameofNONReacRates={}&SubmitMess=Submit&PchosenIdx=0&NchosenIdx=0"
 
 
 ## FUNCTIONS
+
+_nsre = re.compile('([0-9]+)')
+def natural_sort_key(s):
+    # Sorts alphanumerically
+    return [int(text) if text.isdigit() else text.lower()
+            for text in re.split(_nsre, s)]
+
 def write(string):
     """ Simple function to print without newline """
     sys.stdout.write(string)
@@ -64,29 +69,33 @@ def read_file(filename):
     """ Reads the input file and checks the format """
     reactions_reaclib = []
     reactions_bruslib = []
-    format_reaclib = re.compile("\w\w?\d{1,3}\(\w,\w\)(\w\w?\d{1,3})?")
-    format_bruslib = re.compile("(\d{1,3})(\w\w?)(\d{1,3})")
+    #format_reaclib = re.compile("\w\w?(\d{1,3})\(\w,\w\)(\w\w?\d{1,3})?\s?(\d{1,3})?")
+    format_bruslib = re.compile("(\d{1,3})(\w\w?)(\d{1,3})\s?(\d{1,3})?")
     with open(filename, 'r') as rFile:
         for line in rFile:
             line = line.rstrip()
-            m_reaclib = re.match(format_reaclib, line)
-            m_bruslib = re.match(format_bruslib, line)
-            if m_reaclib is not None:
-                reactions_reaclib.append(line)
-            elif m_bruslib is not None:
-                reactions_bruslib.append([m_bruslib.group(1),
-                                          m_bruslib.group(2), m_bruslib.group(3)])
-                for process in ["(n,g)", "(n,p)", "(n,a)"]:
-                    # Convert to reaclib format 
-                    reaction =  "{}{}{}".format(m_bruslib.group(2),
-                                                int(m_bruslib.group(1))+int(m_bruslib.group(3)),
-                                                process)
-                    reactions_reaclib.append(reaction)
+            match = re.match(format_bruslib, line)
+            if match is not None:
+                # Iterate over the range, if given
+                start = int(match.group(3))
+                end = int(match.group(4))+1 if match.group(4) is not None else start+1
+                for neutrons in range(start, end):
+                    reactions_bruslib.append([match.group(1),
+                                              match.group(2), neutrons])
+                    for process in ["(n,g)"]: #, "(n,p)", "(n,a)"]: <------Uncomment this for more reactions                                 
+                        # Convert to reaclib format                                        
+                        reaction =  "{}{}{}".format(match.group(2),                    
+                                                    int(match.group(1))+int(neutrons), 
+                                                    process)                               
+                        reactions_reaclib.append(reaction)                                 
             else:
                 print("{} is of invalid format".format(line))
     print("Parsed {} reactions, where {} can be used for BRUSLIB".format(
         len(reactions_reaclib), len(reactions_bruslib)))
-    return list(set(reactions_reaclib)), reactions_bruslib # Removes duplicates
+    # Remove duplicates
+    reactions_reaclib = list(set(reactions_reaclib))
+    reactions_reaclib.sort(key=natural_sort_key)
+    return reactions_reaclib , reactions_bruslib
 
 def scrape(address):
     """ Get HTML-page for the given url """
@@ -119,7 +128,7 @@ def get_REACLIB(reactions):
 
         # Get the data
         print("Found the rate index. Attempting to download data")
-        link = "{}{}&flattype=4".format(address_data, rateindex.group(1))
+        link = address_data.format(rateindex.group(1))
         filename = "{}_reaclib.txt".format(reaction)
         if not save_data(filename, link):
             continue
