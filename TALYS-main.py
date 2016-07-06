@@ -24,12 +24,13 @@ energy_file = 'energies.txt'
 #element = 'Ge', 'Fe', 'Kg'
 #element = ['Fe', 'Co', 'Kg']
 
-element = 'Ce'
+element = 'Ce', 'Pr'
 
 projectile = 'n'
 
 #mass = 76
-mass = 156, 158, 160, 162, 163, 164
+mass = {'Ce': [156, 160, 158, 160, 162, 163, 164],
+        'Pr':[158, 163]}
 #mass = 86, 87, 88, 110, 300, 241
 
 massmodel = 3
@@ -283,7 +284,7 @@ def run_main(user_input):
 			element_results = '%s/Z%s-%s' %(astro_results, Z_nr[e], e)
 			os.makedirs(element_results)
 
-			for m in user_input['mass']:
+			for m in user_input['mass'][0][e]:
 
 				talys_input['mass'] = m
 

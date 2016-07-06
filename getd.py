@@ -90,9 +90,9 @@ def read_file(filename):
                         reactions_reaclib.append(reaction)                                 
             else:
                 print("{} is of invalid format".format(line))
-    print("Parsed {} reactions, where {} can be used for BRUSLIB".format(
-        len(reactions_reaclib), len(reactions_bruslib)))
-    # Remove duplicates
+                print("Parsed {} reactions, where {} can be used for BRUSLIB".format(
+                    len(reactions_reaclib), len(reactions_bruslib)))
+                # Remove duplicates
     reactions_reaclib = list(set(reactions_reaclib))
     reactions_reaclib.sort(key=natural_sort_key)
     return reactions_reaclib , reactions_bruslib
@@ -103,7 +103,7 @@ def scrape(address):
         res = requests.get(address)
         res.raise_for_status()
     except Exception as e:
-            print("An exception occured: {}".format(e))
+        print("An exception occured: {}".format(e))
             return None
     return res
 
@@ -115,7 +115,7 @@ def change_directory(library):
     directory = "{}-reaction-rates-{}-{}".format(library, date_dir, time_dir)
     if not os.path.exists(directory):
         os.makedirs(directory)
-    os.chdir(directory)
+        os.chdir(directory)
 
 def get_REACLIB(reactions):
     """ Get data from REACLIB. Finds the rateindex and uses it to download the
@@ -163,7 +163,7 @@ def get_BRUSLIB(reactions):
             if link.contents[0] == "data for Neutron Reaction Rates":
                 link_to_data += link.get('href')[2:]
                 break
-        print("ok")
+            print("ok")
 
         # Download and save the data
         filename = "{}{}{}_bruslib.txt".format(reaction[0], reaction[1], reaction[2])
@@ -187,4 +187,4 @@ if __name__ == "__main__":
         get_BRUSLIB(reactions[1])
     else:
         print("Expected file argument: getd.py reactions.txt")
-    os.chdir("..")
+        os.chdir("..")
