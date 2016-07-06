@@ -21,10 +21,7 @@ output_file = 'output.txt'
 #name of energy file:
 energy_file = 'energies.txt'
 
-#element = 'Ge', 'Fe', 'Kg'
-#element = ['Fe', 'Co', 'Kg']
-
-element = 'Ce'
+element = 'Ce', 'Fe'
 
 projectile = 'n'
 
@@ -44,7 +41,9 @@ strength = 1
 
 gnorm = 1.
 
-localomp = 'n'
+optical = ['localomp n', 'jlmomop y']
+
+
 #localomp = ['n', 'y']
 
 #jlmomp = 'y'
@@ -177,6 +176,8 @@ def run_talys(src, input_file, output_file):
 
 def run_main(user_input):
 
+	print user_input
+
 	talys_input = {}
 
 	## make sure input given are iterable
@@ -295,18 +296,26 @@ def run_main(user_input):
 				isotope_results = '%s/%g%s' %(element_results, m, e)
 				os.makedirs(isotope_results)
 
-                                localomp_jlmomp_pairs = [['n', None], [None, 'y']]
-				for mm, lm, s, (l,j) in product(user_input['massmodel'], user_input['ldmodel'], user_input['strength'], localomp_jlmomp_pairs):
+				#localomp_jlmomp_pairs = [['n', None], [None, 'y']]
+				
+				for mm, lm, s, o in product(user_input['massmodel'], user_input['ldmodel'], user_input['strength'], user_input['optical']):
 
-					talys_input['massmodel'], talys_input['ldmodel'], talys_input['strength'], talys_input['localomp'] = mm, lm, s, l
+					print o
+
+					### split optical input into TALYS variable and value
+					optical_name = o.split(' ')[0]
+					optical_value = o.split(' ')[1]
+
+					talys_input['massmodel'], talys_input['ldmodel'], talys_input['strength'], talys_input[optical_name] = mm, lm, s, optical_value
 
 					### mkdir: > TALYS-calculations-date-time/original_data/astro-a/ZZ-X/isotope/isotope-massmodel-ldmodel-strength-localomp-jlmomp
-					variable_directory = '%s/%g%s-0%g-0%g-0%g-%s-%s' %(isotope_original, m, e, mm, lm, s, l, j)
+					variable_directory = '%s/%g%s-0%g-0%g-0%g-%s-%s' %(isotope_original, m, e, mm, lm, s, optical_name, optical_value)
 					os.makedirs(variable_directory)
 
 					### make input file
 					## copy of input_dictionary => able to delete items and iterate over the rest
 					talys_input2 = dict(talys_input)
+					print 'talys input', talys_input
 					## need projectile twice
 					projectile = talys_input2.pop(['projectile'][0])
 					input_file = talys_input2.pop('input_file')
@@ -332,6 +341,7 @@ def run_main(user_input):
 
 					for key, value in talys_input2.iteritems():
 						outfile.write('%s %s \n' %(key, str(value)))
+						print key, value
 
 					outfile.close()
 
@@ -360,7 +370,7 @@ def run_main(user_input):
 
 					## move result file to TALYS-calculations-date-time/original_data/astro-a/ZZ-X/isotope
 					src_result_file = '%s/rp%s%s.tot' %(dst2, Z_nr[e], m+1)
-					dst_result_file = '%s/%s%s-rp%s%s-0%g-0%g-0%g-%s-%s.tot' %(isotope_results, m, e, Z_nr[e], m+1, mm, lm, s, l, j)
+					dst_result_file = '%s/%s%s-rp%s%s-0%g-0%g-0%g-%s-%s.tot' %(isotope_results, m, e, Z_nr[e], m+1, mm, lm, s, optical_name, optical_value)
 
 					try:
 						shutil.copy(src_result_file, dst_result_file)
