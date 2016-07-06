@@ -1,3 +1,4 @@
+#! /usr/bin/python
 """
 ######################
 ##### USER INPUT #####
@@ -43,7 +44,7 @@ strength = 1
 
 gnorm = 1.
 
-localomp = 'y'
+localomp = 'n'
 #localomp = ['n', 'y']
 
 #jlmomp = 'y'
@@ -294,20 +295,10 @@ def run_main(user_input):
 				isotope_results = '%s/%g%s' %(element_results, m, e)
 				os.makedirs(isotope_results)
 
-				for mm, lm, s, l in product(user_input['massmodel'], user_input['ldmodel'], user_input['strength'], user_input['localomp']):
+                                localomp_jlmomp_pairs = [['n', None], [None, 'y']]
+				for mm, lm, s, (l,j) in product(user_input['massmodel'], user_input['ldmodel'], user_input['strength'], localomp_jlmomp_pairs):
 
 					talys_input['massmodel'], talys_input['ldmodel'], talys_input['strength'], talys_input['localomp'] = mm, lm, s, l
-
-					## because default for localomp(l) and jlmomp(j)
-					if l == 'n':
-						j = 'n'
-					
-					elif l == 'y':
-						j = 'y'
-
-					else:
-						print user_input['localomp']
-						sys.exit('problem with localomp/jlmomp')
 
 					### mkdir: > TALYS-calculations-date-time/original_data/astro-a/ZZ-X/isotope/isotope-massmodel-ldmodel-strength-localomp-jlmomp
 					variable_directory = '%s/%g%s-0%g-0%g-0%g-%s-%s' %(isotope_original, m, e, mm, lm, s, l, j)
@@ -410,17 +401,6 @@ def run_main(user_input):
 
 
 
-
-
-
-
-
-
-
-
-
-
-run_main(user_input_dict)
-
-
-
+# Keep the script from running if imported as a module
+if __name__ == "__main__":
+        run_main(user_input_dict)
