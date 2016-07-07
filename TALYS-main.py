@@ -115,6 +115,8 @@ user_input_dict = dict(zip(user_input_keys, user_input_values))
 
 """
 ##########################################
+Imports
+##########################################
 """
 
 import numpy as np
@@ -125,22 +127,52 @@ import sys
 import os as os
 import shutil
 
-## have no idea how this works. no doc
+
+"""
+##########################################
+Global Variables - I shouldn't really exist
+##########################################
+"""
+Z_nr = {'H':'001',  'He':'002', 'Li':'003',  'Be':'004', 'B':'005',   'C':'006',  'N':'007',   'O':'008',  'F':'009',  'Ne':'010', 
+		'Na':'011', 'Mg':'012', 'Al':'013',  'Si':'014', 'P':'015',   'S':'016',  'Cl':'017',  'Ar':'018', 'K':'019',  'Ca':'020', 
+		'Sc':'021', 'Ti':'022', 'V':'023',   'Cr':'024', 'Mn':'025',  'Fe':'026', 'Co':'027',  'Ni':'028', 'Cu':'029', 'Zn':'030', 
+		'Ga':'031', 'Ge':'032', 'As':'033',  'Se':'034', 'Br':'035',  'Kr':'036', 'Rb':'037',  'Sr':'038', 'Y':'039',  'Zr':'040', 
+		'Nb':'041', 'Mo':'042', 'Tc':'043',  'Ru':'044', 'Rh':'045',  'Pd':'046', 'Ag':'047',  'Cd':'048', 'In':'049', 'Sn':'050', 
+		'Sb':'051', 'Te':'052', 'I':'053',   'Xe':'054', 'Cs':'055',  'Ba':'056', 'La':'057',  'Ce':'058', 'Pr':'059', 'Nd':'060', 
+		'Pm':'061', 'Sm':'062', 'Eu':'063',  'Gd':'064', 'Tb':'065',  'Dy':'066', 'Ho':'067',  'Er':'068', 'Tm':'069', 'Yb':'070', 
+		'Lu':'071', 'Hf':'072', 'Ta':'073',  'W':'074',  'Re':'075',  'Os':'076', 'Ir':'077',  'Pt':'078', 'Au':'079', 'Hg':'080', 
+		'Tl':'081', 'Pb':'082', 'Bi':'083',  'Po':'084', 'At':'085',  'Rn':'086', 'Fr':'087',  'Ra':'088', 'Ac':'089', 'Th':'090', 
+		'Pa':'091', 'U':'092',  'Np':'093',  'Pu':'094', 'Am':'095',  'Cm':'096', 'Bk':'097',  'Cf':'098', 'Es':'099', 'Fm':'100', 
+		'Md':'101', 'No':'102', 'Lr':'103',  'Rf':'104', 'Db':'105',  'Sg':'106', 'Bh':'107',  'Hs':'108', 'Mt':'109', 'Ds':'110', 
+		'Rg':'111', 'Cn':'112', 'Uut':'113', 'Fl':'114', 'Uup':'115', 'Lv':'116', 'Uus':'117', 'Uuo':'118'}
+
+#
+"""
+##########################################
+Classes
+##########################################
+"""
 class cd:
     def __init__(self, newPath):
+        """ When an object of cd is created, the given path is expanded all the way back to $HOME"""
         self.newPath = os.path.expanduser(newPath)
 
+        """ In order for an cd object to be used with the with-statement, __enter__ and __exit__ are needed """
     def __enter__(self):
+        """ Changes directory to the one given in __init__ while saving the current when entering
+        the with-statement """
         self.savedPath = os.getcwd()
         os.chdir(self.newPath)
 
     def __exit__(self, etype, value, traceback):
+        """ Returns to the original path when exiting the with-statement """
         os.chdir(self.savedPath)
 
-######################################################
-
-
-
+"""
+###########################################
+Functions
+###########################################
+"""
 
 ## OK+ a little more doc
 def correct(input_argument):
@@ -159,85 +191,19 @@ def correct(input_argument):
 		error_message = " please make sure these input arguments are gives as: \n input = 'no' or input = 'yes' \n input = 'n'  or input = 'y' \n input = ['no', 'yes'] or input = ['n', 'y'] \n"
 		sys.exit(error_message)
 
-Z_nr = {'H':'001',  'He':'002', 'Li':'003',  'Be':'004', 'B':'005',   'C':'006',  'N':'007',   'O':'008',  'F':'009',  'Ne':'010', 
-		'Na':'011', 'Mg':'012', 'Al':'013',  'Si':'014', 'P':'015',   'S':'016',  'Cl':'017',  'Ar':'018', 'K':'019',  'Ca':'020', 
-		'Sc':'021', 'Ti':'022', 'V':'023',   'Cr':'024', 'Mn':'025',  'Fe':'026', 'Co':'027',  'Ni':'028', 'Cu':'029', 'Zn':'030', 
-		'Ga':'031', 'Ge':'032', 'As':'033',  'Se':'034', 'Br':'035',  'Kr':'036', 'Rb':'037',  'Sr':'038', 'Y':'039',  'Zr':'040', 
-		'Nb':'041', 'Mo':'042', 'Tc':'043',  'Ru':'044', 'Rh':'045',  'Pd':'046', 'Ag':'047',  'Cd':'048', 'In':'049', 'Sn':'050', 
-		'Sb':'051', 'Te':'052', 'I':'053',   'Xe':'054', 'Cs':'055',  'Ba':'056', 'La':'057',  'Ce':'058', 'Pr':'059', 'Nd':'060', 
-		'Pm':'061', 'Sm':'062', 'Eu':'063',  'Gd':'064', 'Tb':'065',  'Dy':'066', 'Ho':'067',  'Er':'068', 'Tm':'069', 'Yb':'070', 
-		'Lu':'071', 'Hf':'072', 'Ta':'073',  'W':'074',  'Re':'075',  'Os':'076', 'Ir':'077',  'Pt':'078', 'Au':'079', 'Hg':'080', 
-		'Tl':'081', 'Pb':'082', 'Bi':'083',  'Po':'084', 'At':'085',  'Rn':'086', 'Fr':'087',  'Ra':'088', 'Ac':'089', 'Th':'090', 
-		'Pa':'091', 'U':'092',  'Np':'093',  'Pu':'094', 'Am':'095',  'Cm':'096', 'Bk':'097',  'Cf':'098', 'Es':'099', 'Fm':'100', 
-		'Md':'101', 'No':'102', 'Lr':'103',  'Rf':'104', 'Db':'105',  'Sg':'106', 'Bh':'107',  'Hs':'108', 'Mt':'109', 'Ds':'110', 
-		'Rg':'111', 'Cn':'112', 'Uut':'113', 'Fl':'114', 'Uup':'115', 'Lv':'116', 'Uus':'117', 'Uuo':'118'}
+def mkdir(directory):
+        """ Check if directory exists. If not, create it """
+        if not os.path.exists(directory):
+                os.makedirs(directory)
 
-def run_talys(src, input_file, output_file):
-	with cd('%s' %(src)):
-		os.system('talys <%s> %s' %(input_file, output_file))
-
-
-def run_main(user_input):
-
-	talys_input = {}
-
-	### make sure input given are iterable
-	## if not, put into list
-	
-	for key in user_input:
-
-		if not isinstance(user_input[key], (tuple, list)):
-			## put single input noe iterable into talys_input
-			talys_input[key] = user_input[key]
-			## put single entries into list if iterable variable
-			user_input[key] = [user_input[key]]
-		else:
-			pass
-
-	## #check if every item in user given list is unique
-	for key, value in user_input.iteritems():
-
-		try:
-			## if variable tuple or list => new list with value only once
-			if len(set(value)) != len(value):
-				newlist = []
-				for val in value:
-					if val not in newlist:
-						newlist.append(val)
-				user_input[key] = newlist
-			
-			else:
-				pass
-		
-		except TypeError:
-			## if variable == dict => new dict with value only once inside user_input[key]
-			for keys, values in value[0].iteritems():
-				if len(set(values)) != len(values):
-					newlist = []
-					for val in values:
-						if val not in newlist:
-							newlist.append(val)
-					value[0][keys] = newlist
-
-				user_input[key] = value[0]
-
-			else:
-				pass
-
-
-
-	## mkdir: > TALYS-calculations-date-time
-	date_directory = time.strftime('%y%m%d')
-	time_directory = time.strftime('%H%M%S')
-	top_directory = 'TALYS-calculations-%s-%s' %(date_directory, time_directory)
-	os.makedirs(top_directory)
-
-	## create info_file
+def make_info_file(user_input, top_directory):
+        """ Create the info file and energy file """
+        ## create info_file
 	info_file = '%s-info.txt' %top_directory
 	date_file = time.strftime('%d %B %Y')
 	time_file = time.strftime('%H:%M:%S-%Z')
 
-	outfile_info = open(info_file, 'w')
+        outfile_info = open(info_file, 'w')
 	info_input = dict(user_input)
 
 	## write date, time and input info to info_file
@@ -258,7 +224,6 @@ def run_main(user_input):
 	outfile_info.write('\nmass: %s' %str(info_input.pop('mass')))
 	outfile_info.write('\nenergy: %s \n' %str(info_input.pop('energy_file')))
 
-
 	for value, key in info_input.iteritems():
 		outfile_info.write('\n%s: %s' %(value, key))
 
@@ -272,73 +237,173 @@ def run_main(user_input):
 	for Ei in energies:
 		outfile_energy.write('%.2E \n' %Ei) # write energies to file in column
 		outfile_info.write('%.2E \n' %Ei) # write energies to info file in one column
-	
+	        
 	outfile_energy.close()
 	outfile_info.close()
 
+        ## move energy_file and info_file to:
+        ## > TALYS-calculations-date-time
+        src_energy = user_input['energy_file'][0]
+        src_info = info_file
+        dst_energy_info = top_directory
+        shutil.move(src_energy, dst_energy_info)
+        shutil.move(src_info, dst_energy_info)
+
+def make_header(talys_input, user_input, m, e, o, top_directory, variable_directory):
+        ## copy of input_dictionary => able to delete items and iterate over the rest
+	talys_input2 = dict(talys_input)
+        
+	## need projectile, input_file, output_file twice
+	projectile = talys_input2.pop(['projectile'][0])
+	input_file = talys_input2.pop('input_file')
+	output_file = talys_input2.pop('output_file')
+        
+        outfile_input = open(user_input['input_file'][0], 'w') # create input file
+        
+        outfile_input.write('###################### \n')
+        outfile_input.write('## TALYS input file ## \n')
+        outfile_input.write('##  %s%s(%s,g)%s%s   ## \n' %(m, e, projectile, m+1, e))
+        outfile_input.write('###################### \n \n')
+        outfile_input.write('# All keywords are explained in README. \n \n')
+
+        outfile_input.write('element %s \n' %talys_input2.pop('element'))
+        outfile_input.write('projectile %s \n' %projectile)
+        outfile_input.write('mass %s \n' %m)
+        talys_input2.pop('mass')
+        outfile_input.write('energy %s \n \n' %talys_input2.pop('energy_file'))
+        outfile_input.write('%s\n' %o)
+
+        talys_input2.pop('E1')
+        talys_input2.pop('E2')
+        talys_input2.pop('step')
+
+        for key, value in talys_input2.iteritems():
+                outfile_input.write('%s %s \n' %(key, str(value)))
+
+        outfile_input.close()
+
+        ## Move energy file and input file to isotope directory
+        ## new src energy file
+        src_energy = user_input['energy_file'][0]
+        src_energy_new = '%s/%s' %(top_directory, src_energy)
+        ## src input file
+        src_input = user_input['input_file'][0]
+        ## dst input file > variable directory
+        dst_energy_input = variable_directory
+
+        ## copy energy file to variable directory
+        shutil.copy(src_energy_new, dst_energy_input)
+
+        ## move input file to variable directory
+        shutil.move(src_input, dst_energy_input)
+
+def make_iterable(user_input, talys_input):
+        """
+        Makes the user_input iterable by changing it to a list
+        """
+        for key in user_input:
+
+		if not isinstance(user_input[key], (tuple, list)):
+			## put single input noe iterable into talys_input
+			talys_input[key] = user_input[key]
+			## put single entries into list if iterable variable
+			user_input[key] = [user_input[key]]
+
+	## #check if every item in user given list is unique
+	for key, value in user_input.iteritems():
+
+		try:
+			## if variable tuple or list => new list with value only once
+			if len(set(value)) != len(value):
+				newlist = []
+				for val in value:
+					if val not in newlist:
+						newlist.append(val)
+				user_input[key] = newlist
+		
+		except TypeError:
+			## if variable == dict => new dict with value only once inside user_input[key]
+			for keys, values in value[0].iteritems():
+				if len(set(values)) != len(values):
+					newlist = []
+					for val in values:
+						if val not in newlist:
+							newlist.append(val)
+					value[0][keys] = newlist
+
+				user_input[key] = value[0]
+
+
+
+def run_main(user_input):
+
+	talys_input = {}
+
+	### make sure input given are iterable
+	## if not, put into list
 	
-	## move energy_file and info_file to:
-	## > TALYS-calculations-date-time
-	src_energy = user_input['energy_file'][0]
-	src_info = info_file
-	dst_energy_info = top_directory
-	shutil.move(src_energy, dst_energy_info)
-	shutil.move(src_info, dst_energy_info)
+        make_iterable(user_input, talys_input) # Note, this changes the lists in-place
+
+	## mkdir: > TALYS-calculations-date-time
+	date_directory = time.strftime('%y%m%d')
+	time_directory = time.strftime('%H%M%S')
+	top_directory = 'TALYS-calculations-%s-%s' %(date_directory, time_directory)
+	mkdir(top_directory)
+
+	try:
+                make_info_file(user_input, top_directory)
+        except Exception as e:
+                print "An error occured while writing info file: ", e
+                print "This is unrecoverable. Exiting"
+                sys.exit("Fatal error")
 
 	## mkdir: > TALYS-calculations-date-time/original_data
 	original_data = '%s/original_data' %top_directory
-	os.makedirs(original_data)
+	mkdir(original_data)
 
 	## mkdir: > TALYS-calculations-date-time/results_data
 	results_data = '%s/results_data' %top_directory
-	os.makedirs(results_data)
+	mkdir(results_data)
 
 	for a in user_input['astro']:
+                """ Loop through each value of astro """
 
 		talys_input['astro'] = a
 		
 		## mkdir: TALYS-calculations-date-time/original_data/astro-a
 		astro_original = '%s/astro-%s' %(original_data, correct(a))
-		os.makedirs(astro_original)
+		mkdir(astro_original)
 		
 		## mkdir: > TALYS-calculations-date-time/results_data/astro-a
 		astro_results = '%s/astro-%s' %(results_data, correct(a))
-		os.makedirs(astro_results)
+		mkdir(astro_results)
 
 		for e in user_input['element']:
+                        """ Loop through each element """
 
 			talys_input['element'] = e
 			
 			## mkdir: > TALYS-calculations-date-time/original_data/astro-a/ZZ-X
 			element_original = '%s/Z%s-%s' %(astro_original, Z_nr[e], e)
-			os.makedirs(element_original)
+			mkdir(element_original)
 
 			## mkdir: > TALYS-calculations-date-time/result_data/astro-a/ZZ-X
 			element_results = '%s/Z%s-%s' %(astro_results, Z_nr[e], e)
-			os.makedirs(element_results)
-
-#
+			mkdir(element_results)
 
 			for m in user_input['mass'][e]:
+                                """ Loop through the given masses of the current element, if given """
 
 				talys_input['mass'] = m
 
 				## mkdir: > TALYS-calculations-date-time/original_data/astro-a/ZZ-X/isotope
 				isotope_original = '%s/%g%s' %(element_original, m, e)
-				if not os.path.exists(isotope_original):
-					os.makedirs(isotope_original)
-				else:
-					pass
+				mkdir(isotope_original)
 
 				## mkdir: > TALYS-calculations-date-time/result_data/astro-a/ZZ-X/isotope
 				isotope_results = '%s/%g%s' %(element_results, m, e)
-				if not os.path.exists(isotope_results):
-					os.makedirs(isotope_results)
-				else:
-					pass
+				mkdir(isotope_results)
 
-				#localomp_jlmomp_pairs = [['n', None], [None, 'y']]
-				
 				for mm, lm, s, o in product(user_input['massmodel'], user_input['ldmodel'], user_input['strength'], user_input['optical']):
 
 					### split optical input into TALYS variable and value
@@ -350,54 +415,17 @@ def run_main(user_input):
 
 					### mkdir: > TALYS-calculations-date-time/original_data/astro-a/ZZ-X/isotope/isotope-massmodel-ldmodel-strength-localomp-jlmomp
 					variable_directory = '%s/%g%s-0%g-0%g-0%g-%s-%s' %(isotope_original, m, e, mm, lm, s, optical_name, optical_value)
-					os.makedirs(variable_directory)
+					mkdir(variable_directory)
 
 					### make input file
-					## copy of input_dictionary => able to delete items and iterate over the rest
-					talys_input2 = dict(talys_input)
-					## need projectile, input_file, output_file twice
-					projectile = talys_input2.pop(['projectile'][0])
-					input_file = talys_input2.pop('input_file')
-					output_file = talys_input2.pop('output_file')
-					
 					## make header
-					outfile_input = open(user_input['input_file'][0], 'w') # create input file
-					outfile_input.write('###################### \n')
-					outfile_input.write('## TALYS input file ## \n')
-					outfile_input.write('##  %s%s(%s,g)%s%s   ## \n' %(m, e, projectile, m+1, e))
-					outfile_input.write('###################### \n \n')
-					outfile_input.write('# All keywords are explained in README. \n \n')
-
-					outfile_input.write('element %s \n' %talys_input2.pop('element'))
-					outfile_input.write('projectile %s \n' %projectile)
-					outfile_input.write('mass %s \n' %m)
-					talys_input2.pop('mass')
-					outfile_input.write('energy %s \n \n' %talys_input2.pop('energy_file'))
-					outfile_input.write('%s\n' %o)
-
-					talys_input2.pop('E1')
-					talys_input2.pop('E2')
-					talys_input2.pop('step')
-
-					for key, value in talys_input2.iteritems():
-						outfile_input.write('%s %s \n' %(key, str(value)))
-
-					outfile_input.close()
-
-					## Move energy file and input file to isotope directory
-					## new src energy file
-					src_energy_new = '%s/%s' %(top_directory, src_energy)
-					## src input file
-					src_input = user_input['input_file'][0]
-					## dst input file > variable directory
-					dst_energy_input = variable_directory
-					
-					## copy energy file to variable directory
-					shutil.copy(src_energy_new, dst_energy_input)
-
-
-					## move input file to variable directory
-					shutil.move(src_input, dst_energy_input)
+                                        try:
+                                                make_header(talys_input, user_input, m, e, o, top_directory, variable_directory)
+                                        except Exception as exc:
+                                                print "An error occured while writing header for a={} e={} mm={} lm={} s={} o={}:\n{}".format(a, e, mm, lm, s, o, exc)
+                                                print "Skipping"
+                                                continue
+                                        dst_energy_input = variable_directory
 
 					## run TALYS
 					with cd('%s' %(dst_energy_input)):
@@ -413,11 +441,8 @@ def run_main(user_input):
 					except IOError:
 
 						error_directory = '%s/error' %top_directory
-						if not os.path.exists(error_directory):
-							os.makedirs(error_directory)
-							## put head of error file here?
-						else:
-							pass
+						mkdir(error_directory)
+						## put head of error file here?
 
 						error_file = '%s/%s-error.txt' %(top_directory, Z_nr[e])
 	
@@ -441,6 +466,6 @@ def run_main(user_input):
 
 
 
-# Keep the script from running if imported as a module
+# Keep the script from running ifi mported as a module
 if __name__ == "__main__":
         run_main(user_input_dict)

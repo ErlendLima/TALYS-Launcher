@@ -4,7 +4,7 @@
 This script finds and downloads data from two libraries for reaction rates.
 These libraries are REACLIB and BRUSLIB. As the websites do not supply an easy
 way of requesting the data, the script uses URL-manipulation and HTML-scraping
-to find the download-link. As the reader might suspect, this method will fail
+to find the download link. As the reader might suspect, this method will fail
 if the websites are either updated or suddenly uses another format for their
 URLs. Hopefully, the script is simple enough to change should the need arise.
 
@@ -15,9 +15,6 @@ or 26fe41 45. The file should look like
 
 63eu96 103
 26fe41
-
-NOTE: In order to use BRUSLIB, the second format must be used, while REACLIB
-can use both.
 
 The output files are named after each reaction and suffixed with the library
 from which it was downloaded.
@@ -38,7 +35,7 @@ address_bruslib_data = "http://www.astro.ulb.ac.be/bruslib/"
 
 _nsre = re.compile('([0-9]+)')
 def natural_sort_key(s):
-    # Sorts alphanumerically
+    """ Sorts alphanumerically """
     return [int(text) if text.isdigit() else text.lower()
             for text in re.split(_nsre, s)]
 
@@ -104,7 +101,7 @@ def scrape(address):
         res.raise_for_status()
     except Exception as e:
         print("An exception occured: {}".format(e))
-            return None
+        return None
     return res
 
 
