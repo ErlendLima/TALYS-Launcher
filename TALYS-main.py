@@ -27,17 +27,20 @@ Imports
 ##########################################
 """
 
-import numpy as np
-import time
-from itertools import product
-import sys
-import os as os
-import shutil
-import resource
+import numpy as np                                # Numerical calculations
+import time                                              # Time and date
+from itertools import product                  # Nested for-loops
+import sys                                              # Functions to access system functions
+import os                                                # Functions to access IO of the OS
+import shutil                                           # ?
+import platform                                      # Information about the platform
+import multiprocessing                         # Multiprocessing
+import logging                                       # Logging progress from the processes
+import argparse                                    # Parsing arguments given in terminal
 
 """
 ##########################################
-Global Variables - I shouldn't really exist
+Global Variables
 ##########################################
 """
 Z_nr = {'H':'001',  'He':'002', 'Li':'003',  'Be':'004', 'B':'005',   'C':'006',  'N':'007',   'O':'008',  'F':'009',  'Ne':'010', 
@@ -81,11 +84,39 @@ def mkdir(directory):
         if not os.path.exists(directory):
                 os.makedirs(directory)
 
+def run_talys(dst, input_file, output_file, src_result_file, dst_result_file, variable_directory):
+        assert input_file != output_file   # Prevent headaches
+
+        with Cd(dst):
+                os.system('talys <{}> {}'.format(input_file, output_file))
+
+        ## move result file to TALYS-calculations-date-time/original_data/astro-a/ZZ-X/isotope
+        try:
+                shutil.copy(src_result_file, dst_result_file)
+        except IOError as ioe:
+                print "An error occured while trying to copying the result: ", ioe
+                # mkdir(error_directory)
+                # ## put head of error file here?
+
+                # error_outfile = open('%s/Z%s%s-error.txt' %(error_directory, Z_nr[e], e), 'a+')
+                # error_outfile.write('%s\n' %isotope_results)
+
+                # ## write talys output.txt to error file:
+                # error_talys = open(src_error, 'r')
+                # error_lines = error_talys.readlines()
+
+                # error_outfile.write('Talys output file: \n')
+                # error_outfile.writelines(str(error_lines))
+                # error_outfile.write('\n\n')
+
+                # error_talys.close()
+                # error_outfile.close()
+
+        print 'variable directory =', variable_directory
+
 
 def make_iterable(user_input, talys_input):
-        """
-        Makes the user_input iterable by changing it to a list
-        """
+        """ Makes the user_input iterable by changing it to a list """
         for key in user_input:
 
 		if not isinstance(user_input[key], (tuple, list)):
@@ -123,7 +154,7 @@ def make_iterable(user_input, talys_input):
 Classes
 ##########################################
 """
-class cd:
+class Cd:
     def __init__(self, newPath):
         """ When an object of cd is created, the given path is expanded all the way back to $HOME"""
         self.newPath = os.path.expanduser(newPath)
@@ -140,61 +171,66 @@ class cd:
         os.chdir(self.savedPath)
 
 class Manager:
-        def __init__(self, user_input):
+        def __init__(self, user_input, arguments):
                 self.user_input = user_input
+                self.args = arguments
+                self.jobs = []
 
         def make_info_file(self):
-                """ Create the info file and energy file """
-                ## create info_file
-                info_file = '%s-info.txt' %self.top_directory
+                """ Create the  file and energy file """
+                padding_size = 20
+                ## create file
+                file = '%s-.txt' %self.top_directory
                 date_file = time.strftime('%d %B %Y')
                 time_file = time.strftime('%H:%M:%S-%Z')
 
-                outfile_info = open(info_file, 'w')
-                info_input = dict(self.user_input)
+                outfile = open(file, 'w')
+                input = dict(self.user_input)
 
-                ## write date, time and input info to info_file
-                outfile_info.write('TALYS-calculations')
+                ## write date, time and input  to file
+                outfile.write('TALYS-calculations')
 
-                outfile_info.write('\nDate: %s' %date_file)
-                outfile_info.write('\nTime: %s' %time_file)
-                outfile_info.write('\n\n# name of energy file: %s' %info_input['energy_file'])
-                outfile_info.write('\n# energy min: %s' %info_input.pop('E1'))
-                outfile_info.write('\n# energy max: %s' %info_input.pop('E2'))
-                outfile_info.write('\n# energy step: %s' %info_input.pop('step'))
+                outfile.write('\n{:<{}s} {}'.format("Date:", padding_size, date_file))
+                outfile.write('\n{:<{}s} {}'.format("Time:", padding_size, time_file))
 
-                outfile_info.write('\n\n# name of input file: %s' %info_input.pop('input_file'))
-                outfile_info.write('\n# name of output file: %s' %info_input.pop('output_file'))
-                outfile_info.write('\n\nVariable input:') 
-                outfile_info.write('\nelement: %s' %str(info_input.pop('element')))
-                outfile_info.write('\nprojectile: %s' %str(info_input.pop('projectile')))
-                outfile_info.write('\nmass: %s' %str(info_input.pop('mass')))
-                outfile_info.write('\nenergy: %s \n' %str(info_input.pop('energy_file')))
+                # write system information
+                outfile.write('\n{:<{}s} {}'.format("Platform:", padding_size, platform.platform()))
+                outfile.write('\n{:<{}s} {}'.format("Python version:", padding_size, platform.python_version()))
 
-                for value, key in info_input.iteritems():
-                        outfile_info.write('\n%s: %s' %(value, key))
+                # write energy information
+                outfile.write('\n\n{:<{}s} {}'.format("name of energy file:", padding_size, input['energy_file']))
+                outfile.write('\n{:<{}s} {}'.format("energy min:", padding_size, input['E1']))
+                outfile.write('\n{:<{}s} {}'.format("energy max:", padding_size, input['E2']))
+                outfile.write('\n{:<{}s} {}'.format("energy step:", padding_size, input['step']))
 
-                outfile_info.write('\n\nEnergies: \n')
+                outfile.write('\n\n{:<{}s} {}'.format("name of input file:", padding_size, input['input_file']))
+                outfile.write('\n{:<{}s} {}'.format("name of output file:", padding_size, input['output_file']))
+                outfile.write('\n\nVariable input:') 
+
+                for value, key in input.iteritems():
+                        outfile.write('\n{:<{}s} {}' .format(value+':',  padding_size, key))
+
+                outfile.write('\n\nEnergies: \n')
 
                 ## create energy input 
                 energies = np.linspace(float(self.user_input['E1'][0]), float(self.user_input['E2'][0]), float(self.user_input['step'][0]))
                 ## outfile named energy_file 
                 outfile_energy = open(self.user_input['energy_file'][0], 'w')
-                ## write energies to energy_file and info_file in one column
+                ## write energies to energy_file and file in one column
                 for Ei in energies:
                         outfile_energy.write('%.2E \n' %Ei) # write energies to file in column
-                        outfile_info.write('%.2E \n' %Ei) # write energies to info file in one column
+                        outfile.write('%.2E \n' %Ei) # write energies to  file in one column
 
                 outfile_energy.close()
-                outfile_info.close()
+                outfile.close()
 
                 ## move energy_file and info_file to:
                 ## > TALYS-calculations-date-time
                 src_energy = self.user_input['energy_file'][0]
-                src_info = info_file
-                dst_energy_info = self.top_directory
-                shutil.move(src_energy, dst_energy_info)
-                shutil.move(src_info, dst_energy_info)
+                src = file
+                dst_energy = self.top_directory
+                shutil.move(src_energy, dst_energy)
+                shutil.move(src, dst_energy)
 
         def make_header(self, variable_directory, optical):
                 ## copy of input_dictionary => able to delete items and iterate over the rest
@@ -246,10 +282,10 @@ class Manager:
 
 
         def run(self):
-
+                """ Runs the simulations """
                 self.talys_input = {}
 
-                ### make sure input given are iterable
+                ### make sure inputs given are iterable
                 ## if not, put into list
                 make_iterable(self.user_input, self.talys_input) # Note, this changes the lists in-place
 
@@ -258,7 +294,6 @@ class Manager:
                 time_directory = time.strftime('%H%M%S')
                 self.top_directory = 'TALYS-calculations-%s-%s' %(date_directory, time_directory)
                 mkdir(self.top_directory)
-
                 try:
                         self.make_info_file()
                 except Exception as e:
@@ -314,6 +349,7 @@ class Manager:
                                         isotope_results = '%s/%g%s' %(element_results, m, e)
                                         mkdir(isotope_results)
 
+                                        self.jobs = []
                                         for mm, lm, s, o in product(self.user_input['massmodel'], self.user_input['ldmodel'], self.user_input['strength'], self.user_input['optical']):
 
                                                 ### split optical input into TALYS variable and value
@@ -338,45 +374,32 @@ class Manager:
 
                                                 dst_energy_input = variable_directory
 
-                                                ## run TALYS
-                                                with cd(dst_energy_input):
-                                                        os.system('talys <%s> %s' %(input_file, output_file))
-
-                                                ## move result file to TALYS-calculations-date-time/original_data/astro-a/ZZ-X/isotope
+                                                # Prepare all of the directory names so multiprocessing won't interfer
                                                 src_result_file = '%s/rp%s%s.tot' %(dst_energy_input, Z_nr[e], m+1)
                                                 dst_result_file = '%s/%s%s-rp%s%s-0%g-0%g-0%g-%s-%s.tot' %(isotope_results, m, e, Z_nr[e], m+1, mm, lm, s, optical_name, optical_value)
+                                                error_directory = '%s/error' %self.top_directory
+                                                error_file = '%s/%s-error.txt' %(self.top_directory, Z_nr[e])
+                                                src_error = '%s/output.txt' %dst_energy_input
+                                                ## run TALYS
+                                                j = multiprocessing.Process(target=run_talys, args=(dst_energy_input, input_file, output_file, src_result_file, dst_result_file, variable_directory,))
+                                                self.jobs.append(j)
+                                                j.start()
 
-                                                try:
-                                                        shutil.copy(src_result_file, dst_result_file)
-
-                                                except IOError:
-
-                                                        error_directory = '%s/error' %self.top_directory
-                                                        mkdir(error_directory)
-                                                        ## put head of error file here?
-
-                                                        error_file = '%s/%s-error.txt' %(self.top_directory, Z_nr[e])
-
-                                                        error_outfile = open('%s/Z%s%s-error.txt' %(error_directory, Z_nr[e], e), 'a+')
-                                                        error_outfile.write('%s\n' %isotope_results)
-
-                                                        ## write talys output.txt to error file:
-                                                        src_error = '%s/output.txt' %dst_energy_input
-                                                        error_talys = open(src_error, 'r')
-                                                        error_lines = error_talys.readlines()
-
-                                                        error_outfile.write('Talys output file: \n')
-                                                        error_outfile.writelines(str(error_lines))
-                                                        error_outfile.write('\n\n')
-
-                                                        error_talys.close()
-                                                        error_outfile.close()
-
-                                                print 'variable directory =', variable_directory
-
-
+                                        # Wait for all of the jobs to complete
+                                        for j in self.jobs:
+                                                j.join()
 
 # Keep the script from running if imported as a module
 if __name__ == "__main__":
-        simulations = Manager(user_input_dict)
+        # Handle the arguments from terminal
+        parser = argparse.ArgumentParser()
+        parser.add_argument("--multi-elements", help="Use multiprocessing on each element", action="store_true")
+        args = parser.parse_args()
+
+        # Set up multiprocessing.
+        # MUST BE IN THE FIRST LEVEL SCOPE OF if __name__ == "__main__", I.E HERE
+        multiprocessing.log_to_stderr(logging.DEBUG)
+
+        # Create an instance of Manager to run the simulation
+        simulations = Manager(user_input_dict, args)
         simulations.run()
