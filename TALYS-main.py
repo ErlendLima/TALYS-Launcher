@@ -1,103 +1,12 @@
 #! /usr/bin/python
 """
-######################
-##### USER INPUT #####
-######################
-"""
-
-#Energies
-energy_file = 'energies.txt'
-
-E1 = 0.0025E-03
-E2 = 5000E-03
-step = 100
-
-# name of input file:
-input_file = 'input.txt'
-
-#name of output file:
-output_file = 'output.txt'
-
-#name of energy file:
-energy_file = 'energies.txt'
-
-#element
-element = 'Ce', 'Pr'
-
-#projectile
-projectile = 'n'
-
-#mass = 76
-mass = {'Ce': [156, 160, 158, 160, 162, 163, 164],
-        'Pr':[158, 163, 160]}
-#mass = 86, 87, 88, 110, 300, 241
-
-massmodel = 3
-#massmodel = 1, 2, 3
-
-ldmodel = 3, 3
-#ldmodel = 2, 3, 1
-#ldmodel = 1, 2, 3, 4
-
-strength = 1, 2
-#strength = 1, 2, 3, 4
-
-gnorm = 1.
-
-optical = 'localomp n', 'jlmomp y'
-
-
-#localomp = ['n', 'y']
-
-#jlmomp = 'y'
-#jlmomp = 'n' , 'y'
-#jlmomp = ['y', 'n']
-#jlmomp = ['y', 'h']
-
-
-#astro = 'y'
-astro = 'n'
-
-#epr = 50
-#gpr = 34
-#spr = 70
-
-preequilibrium = 'y'
-fileresidual = 'y'
-outlevels = 'y'
-outdensity = 'y'
-outgamma = 'y'
-
-transeps = 1.00E-15
-xseps = 1.00E-25
-popeps = 1.00E-25
-
-
-
-"""
-########################
-#### END USER INPUT ####
-########################
-"""
-"""
-####################################################################################
-####################################################################################
-####################################################################################
-####################################################################################
-####################################################################################
-####################################################################################
-####################################################################################
-####################################################################################
-"""
-
-
-"""
 ##########################################
 Create list of user input. 
 Must stay in this location or wont work :p
 ##########################################
 """
 
+from talys_options import *
 direct_user_input_keys, direct_user_input_values = locals().keys(), locals().values()
 
 user_input_keys = []
@@ -111,7 +20,7 @@ for key in range(len(direct_user_input_keys)):
 		pass
 
 user_input_dict = dict(zip(user_input_keys, user_input_values))
-
+print user_input_dict
 
 """
 ##########################################
@@ -123,10 +32,8 @@ import numpy as np
 import time
 from itertools import product
 import sys
-
 import os as os
 import shutil
-
 
 """
 ##########################################
@@ -146,7 +53,6 @@ Z_nr = {'H':'001',  'He':'002', 'Li':'003',  'Be':'004', 'B':'005',   'C':'006',
 		'Md':'101', 'No':'102', 'Lr':'103',  'Rf':'104', 'Db':'105',  'Sg':'106', 'Bh':'107',  'Hs':'108', 'Mt':'109', 'Ds':'110', 
 		'Rg':'111', 'Cn':'112', 'Uut':'113', 'Fl':'114', 'Uup':'115', 'Lv':'116', 'Uus':'117', 'Uuo':'118'}
 
-#
 """
 ##########################################
 Classes
@@ -173,6 +79,9 @@ class cd:
 Functions
 ###########################################
 """
+
+def read_files(filename):
+        import filename
 
 ## OK+ a little more doc
 def correct(input_argument):
@@ -363,6 +272,7 @@ def run_main(user_input):
 
 	## mkdir: > TALYS-calculations-date-time/results_data
 	results_data = '%s/results_data' %top_directory
+
 	mkdir(results_data)
 
 	for a in user_input['astro']:
@@ -445,7 +355,7 @@ def run_main(user_input):
 						## put head of error file here?
 
 						error_file = '%s/%s-error.txt' %(top_directory, Z_nr[e])
-	
+
 						error_outfile = open('%s/Z%s%s-error.txt' %(error_directory, Z_nr[e], e), 'a+')
 						error_outfile.write('%s\n' %isotope_results)
 
