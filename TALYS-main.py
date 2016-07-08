@@ -6,20 +6,6 @@ Must stay in this location or wont work :p
 ##########################################
 """
 
-from talys_options import *
-direct_user_input_keys, direct_user_input_values = locals().keys(), locals().values()
-
-user_input_keys = []
-user_input_values = []
-
-for key in range(len(direct_user_input_keys)):
-	if '__' not in(direct_user_input_keys[key]):
-		user_input_keys.append(direct_user_input_keys[key])
-		user_input_values.append(direct_user_input_values[key])
-	else:
-		pass
-
-user_input_dict = dict(zip(user_input_keys, user_input_values))
 
 """
 ##########################################
@@ -32,11 +18,12 @@ import time                                              # Time and date
 from itertools import product                  # Nested for-loops
 import sys                                              # Functions to access system functions
 import os                                                # Functions to access IO of the OS
-import shutil                                           # ?
+import shutil                                           # High-level file manegement
 import platform                                      # Information about the platform
 import multiprocessing                         # Multiprocessing
 import logging                                       # Logging progress from the processes
 import argparse                                    # Parsing arguments given in terminal
+import copy                                          # For deepcopy
 
 """
 ##########################################
@@ -62,11 +49,23 @@ Functions
 ###########################################
 """
 
-## OK+ a little more doc
+def import_options():
+        """ Import the the options. Returns the options in a dict """
+
+        import talys_options
+
+        user_input_keys    = []
+        user_input_values = []
+        for key, value in talys_options.__dict__.iteritems():
+                if '__' not in key:
+                        user_input_keys.append(key)
+                        user_input_values.append(value)
+
+        user_input_dict = dict(zip(user_input_keys, user_input_values))
+        return user_input_dict
+
 def correct(input_argument):
-	"""
-	Function to check syntax of input arguments given by user.
-	"""
+	""" Function to check syntax of input arguments given by user """
 
 	if input_argument in('n', 'no'):
 		return 'no'
@@ -83,37 +82,6 @@ def mkdir(directory):
         """ Check if directory exists. If not, create it """
         if not os.path.exists(directory):
                 os.makedirs(directory)
-
-def run_talys(dst, input_file, output_file, src_result_file, dst_result_file, variable_directory):
-        assert input_file != output_file   # Prevent headaches
-
-        with Cd(dst):
-                os.system('talys <{}> {}'.format(input_file, output_file))
-
-        ## move result file to TALYS-calculations-date-time/original_data/astro-a/ZZ-X/isotope
-        try:
-                shutil.copy(src_result_file, dst_result_file)
-        except IOError as ioe:
-                print "An error occured while trying to copying the result: ", ioe
-                # mkdir(error_directory)
-                # ## put head of error file here?
-
-                # error_outfile = open('%s/Z%s%s-error.txt' %(error_directory, Z_nr[e], e), 'a+')
-                # error_outfile.write('%s\n' %isotope_results)
-
-                # ## write talys output.txt to error file:
-                # error_talys = open(src_error, 'r')
-                # error_lines = error_talys.readlines()
-
-                # error_outfile.write('Talys output file: \n')
-                # error_outfile.writelines(str(error_lines))
-                # error_outfile.write('\n\n')
-
-                # error_talys.close()
-                # error_outfile.close()
-
-        print 'variable directory =', variable_directory
-
 
 def make_iterable(user_input, talys_input):
         """ Makes the user_input iterable by changing it to a list """
@@ -155,26 +123,27 @@ Classes
 ##########################################
 """
 class Cd:
-    def __init__(self, newPath):
-        """ When an object of cd is created, the given path is expanded all the way back to $HOME"""
-        self.newPath = os.path.expanduser(newPath)
+        """ Simplifies directory mangement """
+        def __init__(self, newPath):
+                """ When an object of cd is created, the given path is expanded all the way back to $HOME"""
+                self.newPath = os.path.expanduser(newPath)
 
         """ In order for an cd object to be used with the with-statement, __enter__ and __exit__ are needed """
-    def __enter__(self):
-        """ Changes directory to the one given in __init__ while saving the current when entering
-        the with-statement """
-        self.savedPath = os.getcwd()
-        os.chdir(self.newPath)
+        def __enter__(self):
+                """ Changes directory to the one given in __init__ while saving the current when entering
+                the with-statement """
+                self.savedPath = os.getcwd()
+                os.chdir(self.newPath)
 
-    def __exit__(self, etype, value, traceback):
-        """ Returns to the original path when exiting the with-statement """
-        os.chdir(self.savedPath)
+        def __exit__(self, etype, value, traceback):
+                """ Returns to the original path when exiting the with-statement """
+                os.chdir(self.savedPath)
 
 class Manager:
+        """ Runs the simulations """
         def __init__(self, user_input, arguments):
-                self.user_input = user_input
-                self.args = arguments
-                self.jobs = []
+                self.user_input = user_input            # Arguments read from file
+                self.args = arguments                     # Arguments read from terminal
 
         def make_info_file(self):
                 """ Create the  file and energy file """
@@ -232,67 +201,204 @@ class Manager:
                 shutil.move(src_energy, dst_energy)
                 shutil.move(src, dst_energy)
 
-        def make_header(self, variable_directory, optical):
+        def make_header(self, talys_input, variable_directory, optical):
+                talys_input2 = copy.deepcopy(talys_input)
                 ## copy of input_dictionary => able to delete items and iterate over the rest
-                talys_input2 = dict(self.talys_input)
-                m, e, o = self.talys_input['mass'], self.talys_input['element'], optical
+                m, e, o = talys_input2['mass'], talys_input2['element'], optical
                 ## need projectile, input_file, output_file twice
                 projectile = talys_input2.pop(['projectile'][0])
                 input_file = talys_input2.pop('input_file')
-                output_file = talys_input2.pop('output_file')
 
-                outfile_input = open(self.user_input['input_file'][0], 'w') # create input file
-
+                outfile_input = open(os.path.join(variable_directory, self.user_input["input_file"][0]), 'w')
                 outfile_input.write('###################### \n')
                 outfile_input.write('## TALYS input file ## \n')
                 outfile_input.write('##  {}{}({},g){}{}   ## \n'.format(m, e, projectile, m+1, e))
                 outfile_input.write('###################### \n \n')
                 outfile_input.write('# All keywords are explained in README. \n \n')
 
-                outfile_input.write('element {} \n'.format(talys_input2.pop('element')))
+                outfile_input.write('element {} \n'.format(e))
                 outfile_input.write('projectile {} \n'.format(projectile))
                 outfile_input.write('mass {} \n'.format(m))
-                talys_input2.pop('mass')
                 outfile_input.write('energy {} \n \n'.format(talys_input2.pop('energy_file')))
                 outfile_input.write('{}\n'.format(o))
 
+                talys_input2.pop('element')
+                talys_input2.pop('mass')
                 talys_input2.pop('E1')
                 talys_input2.pop('E2')
                 talys_input2.pop('step')
+                talys_input2.pop('output_file')
 
                 for key, value in talys_input2.iteritems():
                         outfile_input.write('{} {} \n'.format(key, str(value)))
 
                 outfile_input.close()
 
-                ## Move energy file and input file to isotope directory
+                ## Copy energy file  to isotope directory
                 ## new src energy file
                 src_energy = self.user_input['energy_file'][0]
                 src_energy_new = '{}/{}'.format(self.top_directory, src_energy)
-                ## src input file
-                src_input = self.user_input['input_file'][0]
                 ## dst input file > variable directory
                 dst_energy_input = variable_directory
 
                 ## copy energy file to variable directory
                 shutil.copy(src_energy_new, dst_energy_input)
 
-                ## move input file to variable directory
-                shutil.move(src_input, dst_energy_input)
+        def run_element(self, element, talys_input, directories):
+                """ Manages the element-option """
+                talys_input = copy.deepcopy(talys_input)
+                directories = copy.deepcopy(directories)
+                talys_input['element'] = element
+                a = talys_input['astro']
 
+                ## mkdir: > TALYS-calculations-date-time/original_data/astro-a/ZZ-X
+                element_original = '%s/Z%s-%s' %(directories["astro_original"], Z_nr[element], element)
+                directories["element_original"] = element_original
+                mkdir(element_original)
+
+                ## mkdir: > TALYS-calculations-date-time/result_data/astro-a/ZZ-X
+                element_results = '%s/Z%s-%s' %(directories["astro_results"], Z_nr[element], element)
+                directories["element_results"] = element_results
+                mkdir(element_results)
+
+                mass_jobs = []
+                for mass in self.user_input['mass'][element]:
+                        if self.args.multi_mass:
+                                """ Use multiprocessing for each mass """
+                                mass_job = multiprocessing.Process(target=self.run_mass,
+                                                                   args=(mass, talys_input, directories, ))
+                                mass_jobs.append(mass_job)
+                                mass_job.start()
+                        else:
+                                self.run_mass(mass, talys_input, directories)
+
+                # Wait for the mass_jobs to complete
+                for mass_job in mass_jobs:
+                        mass_job.join()
+                        
+
+        def run_mass(self, mass, talys_input, directories):
+                """ Manages the mass-option """
+                talys_input = copy.deepcopy(talys_input)
+                directories = copy.deepcopy(directories)
+                talys_input['mass'] = mass
+                m = mass
+                e = talys_input['element']
+                a = talys_input['astro']
+
+                ## mkdir: > TALYS-calculations-date-time/original_data/astro-a/ZZ-X/isotope
+                isotope_original = '%s/%g%s' %(directories["element_original"], m, e)
+                directories["isotope_original"] = isotope_original
+                mkdir(isotope_original)
+
+                ## mkdir: > TALYS-calculations-date-time/result_data/astro-a/ZZ-X/isotope
+                isotope_results = '%s/%g%s' %(directories["element_results"], m, e)
+                directories["isotope_results"] = isotope_results
+                mkdir(isotope_results)
+
+                # Reset talys job list
+                talys_jobs = []
+
+                for mm, lm, s, o in product(self.user_input['massmodel'], self.user_input['ldmodel'], self.user_input['strength'], self.user_input['optical']):
+
+                        ### split optical input into TALYS variable and value
+                        optical_name = o.split(' ')[0]
+                        optical_value = o.split(' ')[1]
+
+                        #self.talys_input['massmodel'], self.talys_input['ldmodel'], self.talys_input['strength'], self.talys_input[optical_name] = mm, lm, s, optical_value
+                        talys_input['massmodel'], talys_input['ldmodel'], talys_input['strength'] = mm, lm, s
+
+                        ### mkdir: > TALYS-calculations-date-time/original_data/astro-a/ZZ-X/isotope/isotope-massmodel-ldmodel-strength-localomp-jlmomp
+                        variable_directory = '%s/%g%s-0%g-0%g-0%g-%s-%s' %(isotope_original, m, e, mm, lm, s, optical_name, optical_value)
+                        directories["variable_directory"] = variable_directory
+                        mkdir(variable_directory)
+
+                        ### make input file
+                        ## make header
+                        try:
+                                self.make_header(talys_input, variable_directory, o)
+                        except Exception as exc:
+                                print "An error occured while writing header for a={} e={} mm={} lm={} s={} o={}:\n{}".format(a, e, mm, lm, s, o, exc)
+                                print "Skipping"
+                                continue
+                        
+                        # Prepare all of the directory names so multiprocessing won't interfer
+                        src_result_file = '%s/rp%s%s.tot' %(variable_directory, Z_nr[e], m+1)
+                        dst_result_file = '%s/%s%s-rp%s%s-0%g-0%g-0%g-%s-%s.tot' %(isotope_results, m, e, Z_nr[e], m+1, mm, lm, s, optical_name, optical_value)
+                        error_directory = '%s/error' %self.top_directory
+                        error_file = '%s/%s-error.txt' %(self.top_directory, Z_nr[e])
+                        src_error = '%s/output.txt' %variable_directory
+
+                        directories["src_result_file"] = src_result_file
+                        directories["dst_result_file"] = dst_result_file
+                        directories["error_directory"] = error_directory
+                        directories["error_file"] = error_file
+                        directories["src_error"] = src_error
+
+                        ## run TALYS
+                        if self.args.multi_talys:
+                                """ Use multiprocessing on each run of talys"""
+                                talys_job = multiprocessing.Process(target=self.run_talys, args=(directories, e))
+                                talys_jobs.append(talys_job)
+                                talys_job.start()
+                        else:
+                                self.run_talys(directories, e)
+
+                # Wait for all of the talys_jobs to complete
+                for talys_job in talys_jobs:
+                        talys_job.join()
+
+        def run_talys(self, directories, element):
+                """ Runs TALYS """
+                directories = copy.deepcopy(directories)
+                assert directories["input_file"] != directories["output_file"]   # Prevent headaches
+
+                with Cd(directories["variable_directory"]):
+                        os.system('talys <{}> {}'.format(directories["input_file"], directories["output_file"]))
+
+                ## move result file to TALYS-calculations-date-time/original_data/astro-a/ZZ-X/isotope
+                try:
+                        shutil.copy(directories["src_result_file"], directories["dst_result_file"])
+                        raise IOError
+                except IOError as ioe:
+                        print "An error occured while trying to copying the result: ", ioe
+                        mkdir(directories["error_directory"])
+                        ## put head of error file here?
+
+                        error_outfile = open(os.path.join(directories["error_directory"], 'Z%s%s-error.txt' %(Z_nr[element], element)), 'a+')
+                        error_outfile.write('%s\n' %directories["isotope_results"])
+
+                        ## write talys output.txt to error file:
+                        error_talys = open(directories["src_error"], 'r')
+                        error_lines = error_talys.readlines()
+
+                        error_outfile.write('Talys output file: \n')
+                        error_outfile.writelines(str(error_lines))
+                        error_outfile.write('\n\n')
+
+                        error_talys.close()
+                        error_outfile.close()
+
+                print time.strftime('%H:%M:%S'), ' variable directory =', directories["variable_directory"]
 
         def run(self):
                 """ Runs the simulations """
-                self.talys_input = {}
+                talys_input = {}
+                directories = {"input_file": self.user_input['input_file'], "output_file": self.user_input['output_file']}
 
                 ### make sure inputs given are iterable
                 ## if not, put into list
-                make_iterable(self.user_input, self.talys_input) # Note, this changes the lists in-place
+                make_iterable(self.user_input, talys_input) # Note, this changes the lists in-place
 
                 ## mkdir: > TALYS-calculations-date-time
                 date_directory = time.strftime('%y%m%d')
                 time_directory = time.strftime('%H%M%S')
+                directories["date_directory"] = date_directory
+                directories["time_directory"] = time_directory
+
                 self.top_directory = 'TALYS-calculations-%s-%s' %(date_directory, time_directory)
+                directories["top_directory"] = self.top_directory
+
                 mkdir(self.top_directory)
                 try:
                         self.make_info_file()
@@ -303,103 +409,64 @@ class Manager:
 
                 ## mkdir: > TALYS-calculations-date-time/original_data
                 original_data = '%s/original_data' %self.top_directory
+                directories["original_data"] = original_data
                 mkdir(original_data)
 
                 ## mkdir: > TALYS-calculations-date-time/results_data
                 results_data = '%s/results_data' %self.top_directory
-
+                directories["results_data"] = results_data
                 mkdir(results_data)
 
                 for a in self.user_input['astro']:
                         """ Loop through each value of astro """
 
-                        self.talys_input['astro'] = a
+                        talys_input['astro'] = a
 
                         ## mkdir: TALYS-calculations-date-time/original_data/astro-a
                         astro_original = '%s/astro-%s' %(original_data, correct(a))
+                        directories["astro_original"] = astro_original
                         mkdir(astro_original)
 
                         ## mkdir: > TALYS-calculations-date-time/results_data/astro-a
                         astro_results = '%s/astro-%s' %(results_data, correct(a))
+                        directories["astro_results"] = astro_results
                         mkdir(astro_results)
 
-                        for e in self.user_input['element']:
-                                """ Loop through each element """
+                        #Reset elements job list
+                        element_jobs = [] 
 
-                                self.talys_input['element'] = e
+                        for element in self.user_input['element']:
+                                if self.args.multi_elements:
+                                        """ Use multiprocessing for each element """
+                                        element_job = multiprocessing.Process(target=self.run_element,
+                                                                              args=(element,  talys_input, directories, ))
+                                        element_jobs.append(element_job)
+                                        element_job.start()
+                                else:
+                                        self.run_element(element, talys_input, directories)
 
-                                ## mkdir: > TALYS-calculations-date-time/original_data/astro-a/ZZ-X
-                                element_original = '%s/Z%s-%s' %(astro_original, Z_nr[e], e)
-                                mkdir(element_original)
-
-                                ## mkdir: > TALYS-calculations-date-time/result_data/astro-a/ZZ-X
-                                element_results = '%s/Z%s-%s' %(astro_results, Z_nr[e], e)
-                                mkdir(element_results)
-
-                                for m in self.user_input['mass'][e]:
-                                        """ Loop through the given masses of the current element, if given """
-
-                                        self.talys_input['mass'] = m
-
-                                        ## mkdir: > TALYS-calculations-date-time/original_data/astro-a/ZZ-X/isotope
-                                        isotope_original = '%s/%g%s' %(element_original, m, e)
-                                        mkdir(isotope_original)
-
-                                        ## mkdir: > TALYS-calculations-date-time/result_data/astro-a/ZZ-X/isotope
-                                        isotope_results = '%s/%g%s' %(element_results, m, e)
-                                        mkdir(isotope_results)
-
-                                        self.jobs = []
-                                        for mm, lm, s, o in product(self.user_input['massmodel'], self.user_input['ldmodel'], self.user_input['strength'], self.user_input['optical']):
-
-                                                ### split optical input into TALYS variable and value
-                                                optical_name = o.split(' ')[0]
-                                                optical_value = o.split(' ')[1]
-
-                                                #self.talys_input['massmodel'], self.talys_input['ldmodel'], self.talys_input['strength'], self.talys_input[optical_name] = mm, lm, s, optical_value
-                                                self.talys_input['massmodel'], self.talys_input['ldmodel'], self.talys_input['strength'] = mm, lm, s
-
-                                                ### mkdir: > TALYS-calculations-date-time/original_data/astro-a/ZZ-X/isotope/isotope-massmodel-ldmodel-strength-localomp-jlmomp
-                                                variable_directory = '%s/%g%s-0%g-0%g-0%g-%s-%s' %(isotope_original, m, e, mm, lm, s, optical_name, optical_value)
-                                                mkdir(variable_directory)
-
-                                                ### make input file
-                                                ## make header
-                                                try:
-                                                        self.make_header(variable_directory, o)
-                                                except Exception as exc:
-                                                        print "An error occured while writing header for a={} e={} mm={} lm={} s={} o={}:\n{}".format(a, e, mm, lm, s, o, exc)
-                                                        print "Skipping"
-                                                        continue
-
-                                                dst_energy_input = variable_directory
-
-                                                # Prepare all of the directory names so multiprocessing won't interfer
-                                                src_result_file = '%s/rp%s%s.tot' %(dst_energy_input, Z_nr[e], m+1)
-                                                dst_result_file = '%s/%s%s-rp%s%s-0%g-0%g-0%g-%s-%s.tot' %(isotope_results, m, e, Z_nr[e], m+1, mm, lm, s, optical_name, optical_value)
-                                                error_directory = '%s/error' %self.top_directory
-                                                error_file = '%s/%s-error.txt' %(self.top_directory, Z_nr[e])
-                                                src_error = '%s/output.txt' %dst_energy_input
-                                                ## run TALYS
-                                                j = multiprocessing.Process(target=run_talys, args=(dst_energy_input, input_file, output_file, src_result_file, dst_result_file, variable_directory,))
-                                                self.jobs.append(j)
-                                                j.start()
-
-                                        # Wait for all of the jobs to complete
-                                        for j in self.jobs:
-                                                j.join()
+                        # Wait for the element_jobs to complete
+                        for element_job in element_jobs:
+                                element_job.join()
 
 # Keep the script from running if imported as a module
 if __name__ == "__main__":
         # Handle the arguments from terminal
         parser = argparse.ArgumentParser()
-        parser.add_argument("--multi-elements", help="Use multiprocessing on each element", action="store_true")
+        parser.add_argument("--multi_elements", help="Use multiprocessing on each element", action="store_true", default=False)
+        parser.add_argument("--multi_mass", help="Use multiprocessing on each mass", action="store_true", default=False)
+        parser.add_argument("--multi_talys", help="Use multiprocessing on each combination in product", action="store_true", default=False)
+        parser.add_argument("--debug", help="Show multiprocessing debugging information", action="store_true", default=False)
         args = parser.parse_args()
 
         # Set up multiprocessing.
         # MUST BE IN THE FIRST LEVEL SCOPE OF if __name__ == "__main__", I.E HERE
-        multiprocessing.log_to_stderr(logging.DEBUG)
+        if args.debug:
+                multiprocessing.log_to_stderr(logging.DEBUG)
+
+        # Get the options
+        user_input = import_options()
 
         # Create an instance of Manager to run the simulation
-        simulations = Manager(user_input_dict, args)
+        simulations = Manager(user_input, args)
         simulations.run()
