@@ -1,19 +1,12 @@
 #! /usr/bin/python
 """
 ##########################################
-Create list of user input. 
-Must stay in this location or wont work :p
-##########################################
-"""
-
-
-"""
-##########################################
 Imports
 ##########################################
 """
 
-import numpy as np                                # Numerical calculations
+from __future__ import print_function  # To write to stderr
+import numpy as np
 import time                                              # Time and date
 from itertools import product                  # Nested for-loops
 import sys                                              # Functions to access system functions
@@ -24,6 +17,10 @@ import multiprocessing                         # Multiprocessing
 import logging                                       # Logging progress from the processes
 import argparse                                    # Parsing arguments given in terminal
 import copy                                          # For deepcopy
+#from enum import Enum                      # Enumeration for levels of verbosity and logging
+import logging                                      # Manages logging
+import traceback
+import datetime
 
 """
 ##########################################
@@ -49,6 +46,8 @@ Functions
 ###########################################
 """
 
+
+
 def import_options():
         """ Import the the options. Returns the options in a dict """
 
@@ -63,6 +62,19 @@ def import_options():
 
         user_input_dict = dict(zip(user_input_keys, user_input_values))
         return user_input_dict
+
+def count_combinations(options):
+        """ Returns the combinations of the options to be run """
+        elements = len(options["element"])
+        masses = 0
+        for e in options["element"]:
+                masses += len(options["mass"][e])
+        astro = len(options["astro"])
+        rest = 0
+        options = make_iterable(options)
+        for mm, lm, s, o  in product(options['massmodel'], options['ldmodel'], options['strength'], options['optical']):
+                rest += 1
+        return astro, elements, masses, rest, astro*masses*rest
 
 def correct(input_argument):
 	""" Function to check syntax of input arguments given by user """
@@ -83,18 +95,20 @@ def mkdir(directory):
         if not os.path.exists(directory):
                 os.makedirs(directory)
 
-def make_iterable(user_input, talys_input):
-        """ Makes the user_input iterable by changing it to a list """
-        for key in user_input:
+def make_iterable(dictionary):
+        """ Makes every entry in the dictionary iterable and returns the result """
+        new_dict = copy.deepcopy(dictionary)
 
-		if not isinstance(user_input[key], (tuple, list)):
-			## put single input noe iterable into talys_input
-			talys_input[key] = user_input[key]
-			## put single entries into list if iterable variable
-			user_input[key] = [user_input[key]]
+        for key in dictionary:
+		if not isinstance(dictionary[key], (tuple, list)):
+                        new_dict[key] = [new_dict[key]]
+			# ## put single input noe iterable into talys_input
+			# talys_input[key] = user_input[key]
+			# ## put single entries into list if iterable variable
+			# user_input[key] = [user_input[key]]
 
 	## #check if every item in user given list is unique
-	for key, value in user_input.iteritems():
+	for key, value in new_dict.iteritems():
 
 		try:
 			## if variable tuple or list => new list with value only once
@@ -103,7 +117,7 @@ def make_iterable(user_input, talys_input):
 				for val in value:
 					if val not in newlist:
 						newlist.append(val)
-				                user_input[key] = newlist
+				                new_dict[key] = newlist
 		                                
 		except TypeError:
 			## if variable == dict => new dict with value only once inside user_input[key]
@@ -115,7 +129,9 @@ def make_iterable(user_input, talys_input):
 							newlist.append(val)
 					                value[0][keys] = newlist
 
-				user_input[key] = value[0]
+				new_dict[key] = value[0]
+        return new_dict
+
 
 """
 ##########################################
@@ -139,11 +155,80 @@ class Cd:
                 """ Returns to the original path when exiting the with-statement """
                 os.chdir(self.savedPath)
 
+# class Log:
+# 	""" Simplifies logging """
+# 	def __init__(self, log_level=Log_level.INFO, verbosity=Verbosity_level.NOTHING, log_filename="log.txt", output_channel=sys.stdout):
+# 		self.log_level = log_level
+# 		self.verbosity = verbosity
+# 		self.filename = log_filename
+# 		self.output_channel = output_channel
+# 		if self.verbosity >= Verbosity_level.DEBUG:
+# 			self.write(stamp("Log level: {}".format(self.log_level)))
+# 			self.write(stamp("Verbosity: {}".format(self.verbosity)))
+# 			self.write(stamp("Writing to {}".format(self.filename)))
+
+# 	def __call__(self, msg, vThreshold=Verbosity_level.NOTHING, lThreshold=Log_level.NOTHING, **kwargs):
+# 		""" Writes to log and to stdout/stderr depending on levels """
+# 		if self.verbosity > vThreshold:
+# 			self.write(stamp(msg), **kwargs)
+# 		if self.log_level > lThreshold:
+# 			self.queue.put(stamp(msg))
+		
+# 	def start(self, top_directory):
+# 		""" Set up the logging server """
+# 		if self.log_level > Log_level.NOTHING:
+# 			if self.verbosity > Verbosity_level.NOTHING:
+# 				self.write(stamp("Starting server"))
+# 			self.queue = mutliprocessing.Queue()
+# 			self.server = multiprocessing.Process(target=self.run_server, args=(top_directory,))
+# 			self.server.start()
+
+# 	def run_server(self, top_directory):
+# 		""" Reads from queue and writes to file """
+# 		self.server_is_running = True
+# 		with open(os.paths.join(top_directory, self.log_filename), "a") as log:
+# 			while self.server_is_running:
+# 				msg = self.queue.get()
+# 				log.write("{}\n".format(msg))
+
+# 	def write(self, *args, **kwargs):
+# 		""" Prints to the specified channel """
+# 		output_channel = self.output_channel if "file" not in kwargs else kwargs["file"]
+# 		print(*args, file=output_channel, **kwargs)
+
 class Manager:
         """ Runs the simulations """
-        def __init__(self, user_input, arguments):
+        def __init__(self, user_input, args):
                 self.user_input = user_input            # Arguments read from file
-                self.args = arguments                     # Arguments read from terminal
+                self.args = args                               # Arguments read from terminal
+
+        def init_logger(self):
+	        """ Set up logging"""
+                self.logger = multiprocessing.get_logger()
+
+                # File Handler
+                self.file_handle = logging.FileHandler(os.path.join(self.top_directory, self.args.lfilename))
+                self.file_handle.setLevel(self.args.log)
+                # Console handler
+                self.console_handle = logging.StreamHandler()
+                self.console_handle.setLevel(self.args.verbosity)
+                # Formatter
+                formatter = logging.Formatter('%(asctime)s - %(processName)s -  %(levelname)s - %(message)s')
+                self.file_handle.setFormatter(formatter)
+                self.console_handle.setFormatter(formatter)
+                
+                self.logger.addHandler(self.file_handle)
+                self.logger.addHandler(self.console_handle)
+                
+                sys.excepthook = self.excepthook
+                
+        def excepthook(self, ex_cls, ex, tb):
+                """ Kill all children when script crashes """
+                self.logger.critical(''.join(traceback.format_tb(tb)))
+                self.logger.critical('{0}: {1}'.format(ex_cls, ex))
+                for p in multiprocessing.active_children():
+                        p.terminate()
+                sys.exit()
 
         def make_info_file(self):
                 """ Create the  file and energy file """
@@ -228,6 +313,7 @@ class Manager:
                 talys_input2.pop('E2')
                 talys_input2.pop('step')
                 talys_input2.pop('output_file')
+                talys_input2.pop('optical')
 
                 for key, value in talys_input2.iteritems():
                         outfile_input.write('{} {} \n'.format(key, str(value)))
@@ -260,7 +346,6 @@ class Manager:
                 element_results = '%s/Z%s-%s' %(directories["astro_results"], Z_nr[element], element)
                 directories["element_results"] = element_results
                 mkdir(element_results)
-
                 mass_jobs = []
                 for mass in self.user_input['mass'][element]:
                         if self.args.multi_mass:
@@ -298,7 +383,7 @@ class Manager:
 
                 # Reset talys job list
                 talys_jobs = []
-
+                self.talys_queue = multiprocessing.Queue()
                 for mm, lm, s, o in product(self.user_input['massmodel'], self.user_input['ldmodel'], self.user_input['strength'], self.user_input['optical']):
 
                         ### split optical input into TALYS variable and value
@@ -318,13 +403,14 @@ class Manager:
                         try:
                                 self.make_header(talys_input, variable_directory, o)
                         except Exception as exc:
-                                print "An error occured while writing header for a={} e={} mm={} lm={} s={} o={}:\n{}".format(a, e, mm, lm, s, o, exc)
-                                print "Skipping"
+                                self.logger.error( "An error occured while writing header for a={} e={} mm={} lm={} s={} o={}:\n{}".format(a, e, mm, lm, s, o, exc))
                                 continue
                         
                         # Prepare all of the directory names so multiprocessing won't interfer
-                        src_result_file = '%s/rp%s%s.tot' %(variable_directory, Z_nr[e], m+1)
-                        dst_result_file = '%s/%s%s-rp%s%s-0%g-0%g-0%g-%s-%s.tot' %(isotope_results, m, e, Z_nr[e], m+1, mm, lm, s, optical_name, optical_value)
+                        #src_result_file = '%s/rp%s%s.tot' %(variable_directory, Z_nr[e], m+1)
+                        src_result_file = "{}/astrorate.tot".format(variable_directory)
+                        dst_result_file = "{}/{}{}{}{}-{}-{}-{}-{}-{}-astrorate.tot".format(isotope_results, m, e, Z_nr[e], m+1, mm, lm, s, optical_name, optical_value)
+                        #dst_result_file = '%s/%s%s-rp%s%s-0%g-0%g-0%g-%s-%s.tot' %(isotope_results, m, e, Z_nr[e], m+1, mm, lm, s, optical_name, optical_value)
                         error_directory = '%s/error' %self.top_directory
                         error_file = '%s/%s-error.txt' %(self.top_directory, Z_nr[e])
                         src_error = '%s/output.txt' %variable_directory
@@ -337,8 +423,27 @@ class Manager:
 
                         ## run TALYS
                         if self.args.multi_talys:
-                                """ Use multiprocessing on each run of talys"""
-                                talys_job = multiprocessing.Process(target=self.run_talys, args=(directories, e))
+	                        """ Use multiprocessing on each run of talys"""
+	                        if self.args.processes > 0:
+		                        if  len(talys_jobs) >= self.args.processes:
+			                        """ Use the set number of processes. Wait for available
+			                             Gets blocked until something is put on the queue, i.e. of the the
+			                             subprocesses has finished
+			                        """
+			                        self.logger.debug("Waiting for available process")
+			                        pid = self.talys_queue.get()
+			                        # To prevent any fuckups, wait for the process to finished if, by any chance, it hasn't
+			                        time.sleep(1)
+			                        for process in talys_jobs:
+				                        if process.pid == pid:
+					                        if process.is_alive():
+						                        self.logger.critical("{} didn't die!!".format(pid))
+						                        process.join()
+					                        # remove it from the list
+					                        self.logger.debug("Removing {} from list".format(pid))
+					                        talys_jobs.remove(process)
+					                        break
+                                talys_job = multiprocessing.Process(target=self.run_talys, args=(directories, e, ))
                                 talys_jobs.append(talys_job)
                                 talys_job.start()
                         else:
@@ -353,18 +458,18 @@ class Manager:
                 directories = copy.deepcopy(directories)
                 assert directories["input_file"] != directories["output_file"]   # Prevent headaches
 
+                _start = time.time()
                 with Cd(directories["variable_directory"]):
-                        os.system('talys <{}> {}'.format(directories["input_file"], directories["output_file"]))
-
-                ## move result file to TALYS-calculations-date-time/original_data/astro-a/ZZ-X/isotope
+	                os.system('talys <{}> {}'.format(directories["input_file"], directories["output_file"]))
+	        elapsed = time.strftime("%M:%S", time.localtime(time.time() - _start))
+	        self.logger.info("Execution time: {} by {}".format(elapsed, directories["variable_directory"]))
+                 ## move result file to TALYS-calculations-date-time/original_data/astro-a/ZZ-X/isotope
                 try:
                         shutil.copy(directories["src_result_file"], directories["dst_result_file"])
-                        raise IOError
                 except IOError as ioe:
-                        print "An error occured while trying to copying the result: ", ioe
+                        self.logger.error( "An error occured while trying to copying the result: {}".format(ioe))
                         mkdir(directories["error_directory"])
                         ## put head of error file here?
-
                         error_outfile = open(os.path.join(directories["error_directory"], 'Z%s%s-error.txt' %(Z_nr[element], element)), 'a+')
                         error_outfile.write('%s\n' %directories["isotope_results"])
 
@@ -379,17 +484,18 @@ class Manager:
                         error_talys.close()
                         error_outfile.close()
 
-                print time.strftime('%H:%M:%S'), ' variable directory =', directories["variable_directory"]
+                self.logger.info('variable directory = {}'.format(directories["variable_directory"]))
+
+                # Tell the parent process that the child has finnished
+                self.logger.debug("{} is terminating".format(multiprocessing.current_process().pid))
+                self.talys_queue.put(multiprocessing.current_process().pid)
 
         def run(self):
                 """ Runs the simulations """
-                talys_input = {}
+                talys_input = copy.deepcopy(self.user_input)
                 directories = {"input_file": self.user_input['input_file'], "output_file": self.user_input['output_file']}
-
                 ### make sure inputs given are iterable
-                ## if not, put into list
-                make_iterable(self.user_input, talys_input) # Note, this changes the lists in-place
-
+                self.user_input = make_iterable(self.user_input)
                 ## mkdir: > TALYS-calculations-date-time
                 date_directory = time.strftime('%y%m%d')
                 time_directory = time.strftime('%H%M%S')
@@ -398,13 +504,14 @@ class Manager:
 
                 self.top_directory = 'TALYS-calculations-%s-%s' %(date_directory, time_directory)
                 directories["top_directory"] = self.top_directory
-
                 mkdir(self.top_directory)
+
+                # Initialize and start the logging
+                self.init_logger()
                 try:
                         self.make_info_file()
                 except Exception as e:
-                        print "An error occured while writing info file: ", e
-                        print "This is unrecoverable. Exiting"
+                        self.logger.error( "An error occured while writing info file: {}".format(e))
                         sys.exit("Fatal error")
 
                 ## mkdir: > TALYS-calculations-date-time/original_data
@@ -453,20 +560,37 @@ class Manager:
 if __name__ == "__main__":
         # Handle the arguments from terminal
         parser = argparse.ArgumentParser()
-        parser.add_argument("--multi_elements", help="Use multiprocessing on each element", action="store_true", default=False)
-        parser.add_argument("--multi_mass", help="Use multiprocessing on each mass", action="store_true", default=False)
-        parser.add_argument("--multi_talys", help="Use multiprocessing on each combination in product", action="store_true", default=False)
-        parser.add_argument("--debug", help="Show multiprocessing debugging information", action="store_true", default=False)
+        parser.add_argument("--multi_elements", help="Use multiprocessing on each element", action="store_true")
+        parser.add_argument("--multi_mass", help="Use multiprocessing on each mass", action="store_true")
+        parser.add_argument("--multi_talys", help="Use multiprocessing on each combination in product", action="store_true")
+        parser.add_argument("--debug", help="Show debugging information. Overrules log and verbosity", action="store_true")
+        parser.add_argument("--combinations", help="Give a summary over how many TALYS-runs are needed to exhaust all of the combinations", action="store_true", default=False)
+        parser.add_argument("-l", "--log", help="Set the log level",
+                            choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+                            type=str.upper, default="INFO")
+        parser.add_argument("-v", "--verbosity", help="Set the verbosity level",
+                            choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+                            type=str.upper, default="INFO")
+        parser.add_argument("--lfilename", help="Filename of the log file", type=str, default="talys.log")
+        parser.add_argument("-p", "--processes", help="Set the number of processes the script will use. Should be less than or equal to number of CPU cores",
+                            type=int, default=0)
+        
         args = parser.parse_args()
 
-        # Set up multiprocessing.
-        # MUST BE IN THE FIRST LEVEL SCOPE OF if __name__ == "__main__", I.E HERE
+        # Set up  logging
+        args.log = getattr(logging, args.log)
+        args.verbosity = getattr(logging, args.verbosity)
         if args.debug:
-                multiprocessing.log_to_stderr(logging.DEBUG)
+	        args.log = logging.DEBUG
+	        args.verbosity = logging.DEBUG
+        logging.basicConfig(level=args.log, filename=args.lfilename, filemode="w")
 
         # Get the options
-        user_input = import_options()
-
+        options = import_options()
+        if args.combinations:
+                print( "Astro: {}\nElements: {}\nMasses: {}\nRest: {}\nTotal: {}".format(*count_combinations(options)))
+                sys.exit()
+        
         # Create an instance of Manager to run the simulation
-        simulations = Manager(user_input, args)
+        simulations = Manager(user_input=options, args=args)
         simulations.run()

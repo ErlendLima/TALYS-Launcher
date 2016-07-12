@@ -27,8 +27,8 @@ mass = {'Ce': [156, 160, 158, 160, 162, 163, 164],
         'Pr':[158, 163, 160]}
 #mass = 86, 87, 88, 110, 300, 241
 
-massmodel = 3
-#massmodel = 1, 2, 3
+#massmodel = 3
+massmodel = 1, 2, 3
 
 ldmodel = 3, 3
 #ldmodel = 2, 3, 1
@@ -51,7 +51,7 @@ optical = 'localomp n', 'jlmomp y'
 
 
 #astro = 'y'
-astro = 'n'
+astro = 'y'
 
 #epr = 50
 #gpr = 34
