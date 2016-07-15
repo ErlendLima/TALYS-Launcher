@@ -1,0 +1,153 @@
+{
+    "comment":"The keywords for TALYS",
+    "keywords":{
+        "comment":"Energies",
+        "energy_file": "energies.txt",
+
+        "comment":"element",
+        "element":["Pm", "Pr", "Ce"],
+
+        "comment":"projectile",
+        "projectile":"'n'",
+
+        "mass":{"Ce":["156", "160", "158", "160", "162", "163", "164"],
+                "Pr":["158", "163", "160"],
+	            "Pm":["168"]},
+
+        "massmodel":["1", "2", "3", "4"],
+
+        "ldmodel":["1", "2"],
+
+        "strength":["5", "6"],
+
+        "gnorm":"1.",
+
+        "astro":"y",
+
+        "preequilibrium":"y",
+        "fileresidual":"y",
+        "outlevels":"y",
+        "outdensity":"y",
+        "outgamma":"y",
+
+        "transeps":"1.00E-15",
+        "xseps":"1.00E-25",
+        "popeps":"1.00E-25"
+    },
+    "comment":"The TALYS keywords that depend on other keywords",
+    "conditionals":{
+        "comment": "The names, such as 'optical', are irrelevant",
+        "Optical": {"localomp": "n", "jlmomp":"y"}
+    },
+    "comment": "The keywords for the Python script",
+    "script_keywords":{
+        "E1":"0.0025E-03",
+        "E2":"5000E-03",
+        "step":"100",
+
+        "comment":" name of input file:",
+        "input_file":"'input.txt'",
+
+        "comment":"name of output file:",
+        "output_file":"'output.txt'",
+
+        "comment":"name of energy file:",
+        "energy_file":"'energies.txt'"        
+    },
+    "comment": "This is the directory structure",
+    "structure":{
+        "comment": "blah",
+        "name":"TALYS-{date}-{time}",
+        "type":"dir",
+        "children":{
+            "The work folder":{
+                "comment":"Blah",
+                "name":"work",
+                "type":"dir",
+                "children":{
+                    "elements dir":{
+                        "comment":"The elements",
+                        "type":"dir",
+                        "name":"{element}",
+                        "iterate":"element",
+                        "children":{
+                            "mass dir":{
+                                "comment": "The masses",
+                                "type":"dir",
+                                "name":"{element}{mass}",
+                                "iterate":"mass",
+                                "children":{
+                                    "final dir":{
+                                        "comment": "The TALYS work directory",
+                                        "type":"dir",
+                                        "iterate":"rest",
+                                        "name":"{rest}"
+                                        "children":{
+                                            "input file":{
+                                                "name":"{input_file}",
+                                                "type":"file"
+                                            }
+                                            "energies file":{
+                                                "name":"{energy_file}",
+                                                "type":"file"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                
+            },
+            "name2":{
+                "comment":"The results directory",
+                "name":"result",
+                "type":"dir",
+                "children":{
+                    "dir1":{
+                        "comment":"Each element's result directory",
+                        "name":"{element}",
+                        "type":"dir",
+                        "children":{
+                            "file1":{
+                                "comment":"put the files here",
+                                "type":"file",
+                                "name":"{element}{mass}-{rest}.tot"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "structure1":{
+        "comment":"the root directory of the project",
+        "TALYS-{date}-{time}":{
+            "comment":"the top of the work directories of TALYS",
+            "work":{
+                "comment":"The element",
+                "key":"work",
+                "{element}":{
+                    "comment":"The isotope",
+                    "{mass}{element}":{
+                        "comment":"All of the other keywords",
+                        "{rest}":{}
+                    }
+                }
+            },
+            "comment":"the top of the directories where the wanted resulting files  are places",
+            "result":{
+                "comment":"The element",
+                "key":"result",
+                "{}":{
+                    "comment":"The isotope",
+                    "{mass}{element}":{
+                        "comment":"All of the other keywords",
+                        "{rest}":""
+                    }
+                }
+            }
+        }
+    }
+}

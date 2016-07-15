@@ -15,11 +15,11 @@ import sys                               # Functions to access system functions
 import os                                # Functions to access IO of the OS
 import shutil                            # High-level file manegement
 import platform                          # Information about the platform
-import multiprocessing                   # Multiprocessing
 import logging                           # Logging progress from the processes
 import argparse                          # Parsing arguments given in terminal
 import copy                              # For deepcopy
 import traceback                         # To log tracebacks
+from mpi4py import MPI                   # For multiprocessing and Abel
 
 """
 ##########################################
@@ -88,7 +88,7 @@ def correct(input_argument):
     # if input argument is given incorrectly, function returns 'error'
     else:
         error_message = " please make sure these input arguments are gives as: \n input = 'no' or input = 'yes' \n input = 'n'  or input = 'y' \n input = ['no', 'yes'] or input = ['n', 'y'] \n"
-        sys.exit(error_message)
+        comm.Abort()
 
 
 def mkdir(directory):
@@ -142,14 +142,6 @@ def get_args():
         Any changes to the arguments from terminal are done here
     """
     parser = argparse.ArgumentParser()
-    parser.add_argument("--multi_elements",
-                        help="Use multiprocessing on each element. Do not use", action="store_true")
-    parser.add_argument("--multi_mass",
-                        help="Use multiprocessing on each mass. Do not use",
-                        action="store_true")
-    parser.add_argument("--multi",
-                        help="Use multiprocessing on each combination in product",
-                        action="store_true")
     parser.add_argument("--debug",
                         help="Show debugging information. Overrules log and verbosity",
                         action="store_true")
@@ -172,8 +164,107 @@ def get_args():
     parser.add_argument("-p", "--processes",
                         help="Set the number of processes the script will use. Should be less than or equal to number of CPU cores",
                         type=int, default=0)
-    return parser.parse_args()
 
+    args = parser.parse_args()
+    # Convert the input strings to the corresponding logging type
+    args.log = getattr(logging, args.log)
+    args.verbosity = getattr(logging, args.verbosity)
+
+    # --debug overrules --log and --verbosity
+    if args.debug:
+        args.log = logging.DEBUG
+        args.verbosity = logging.DEBUG
+
+    return args
+
+
+def init_logger(args):
+    """ Set up logging"""
+
+    logger = logging.getLogger()
+
+    # File Handler - writes log messages to file
+    file_handle = logging.FileHandler(args.lfilename)
+    file_handle.setLevel(args.log)
+
+    # Console handler - writes log messages to the console
+    console_handle = logging.StreamHandler()
+    console_handle.setLevel(args.verbosity)
+
+    # Formatter - formates the input
+    # something is really buggy here, but by a miracle, it got fixed
+    # do not touch this
+    formatter = logging.Formatter('%(asctime)s - %(processName)-12s -  %(levelname)-8s - %(message)s')
+    file_handle.setFormatter(formatter)
+    console_handle.setFormatter(formatter)
+
+    # connect the handlers to the actual logging
+    logger.addHandler(file_handle)
+    logger.addHandler(console_handle)
+
+    return logger
+
+
+def excepthook(ex_cls, ex, tb):
+    """ Log traceback when script crashes """
+    # log the traceback in a readable format
+    logger.critical(''.join(traceback.format_tb(tb)))
+    # log a short summary of the exception
+    logger.critical('{0}: {1}'.format(ex_cls, ex))
+    comm.Abort()
+
+
+def wait_for_root():
+    data = np.zeros()
+    comm.Recv(data, source=MPI.ANY_SOURCE)
+    print data
+
+
+def run_talys(directories, element):
+    """ Runs TALYS """
+    # deepcopy the directories list to prevent multiprocessing mixup
+    directories = copy.deepcopy(directories)
+
+    # prevent headaches
+    assert directories["input_file"] != directories["output_file"]
+
+    # actually run TALYS and time its execution
+    start = time.time()
+    with Cd(directories["variable_directory"]):
+        os.system('talys <{}> {}'.format(
+            directories["input_file"], directories["output_file"]))
+        elapsed = time.strftime("%M:%S", time.localtime(time.time() - start))
+        logger.info("Execution time: %s by %s", elapsed,
+                    directories["variable_directory"])
+
+    # move result file to
+    # TALYS-calculations-date-time/original_data/astro-a/ZZ-X/isotope
+    try:
+        shutil.copy(directories["src_result_file"],
+                    directories["dst_result_file"])
+    except IOError as ioe:
+        # if this happens, the cause is always that TALYS hasn't run
+        logger.error(
+            "An error occured while trying to copying the result: %s", ioe)
+        mkdir(directories["error_directory"])
+
+        # put head of error file here?
+        error_outfile = open(os.path.join(directories["error_directory"],
+                                          'Z%s%s-error.txt' % (Z_nr[element], element)), 'a+')
+        error_outfile.write('%s\n' % directories["isotope_results"])
+
+        # write talys output.txt to error file:
+        error_talys = open(directories["src_error"], 'r')
+        error_lines = error_talys.readlines()
+
+        error_outfile.write('Talys output file: \n')
+        error_outfile.writelines(str(error_lines))
+        error_outfile.write('\n\n')
+
+        error_talys.close()
+        error_outfile.close()
+
+    logger.debug('variable directory = %s', directories["variable_directory"])
 
 """
 ##########################################
@@ -208,53 +299,6 @@ class Manager:
     def __init__(self, user_input, args):
         self.user_input = user_input  # Arguments read from file
         self.args = args              # Arguments read from terminal
-
-    def init_logger(self):
-        """ Set up logging"""
-
-        # supress multiprocessing information if --multi is not set
-        if self.args.multi:
-            self.logger = multiprocessing.get_logger()
-        else:
-            self.logger = logging.getLogger()
-
-        # File Handler - writes log messages to file
-        self.file_handle = logging.FileHandler(
-            os.path.join(self.root_directory, self.args.lfilename))
-        self.file_handle.setLevel(self.args.log)
-
-        # Console handler - writes log messages to the console
-        self.console_handle = logging.StreamHandler()
-        self.console_handle.setLevel(self.args.verbosity)
-
-        # Formatter - formates the input
-        # something is really buggy here, but by a miracle, it got fixed
-        # do not touch this
-        formatter = logging.Formatter('%(asctime)s - %(processName)-12s -  %(levelname)-8s - %(message)s')
-        self.file_handle.setFormatter(formatter)
-        self.console_handle.setFormatter(formatter)
-
-        # connect the handlers to the actual logging
-        self.logger.addHandler(self.file_handle)
-        self.logger.addHandler(self.console_handle)
-
-        # for debugging purposes
-        self.logger.debug(multiprocessing.current_process().pid)
-
-        # not an ideal please for this expression, but there is no better place
-        # sys.excepthook is what deals with an unhandled exception
-        sys.excepthook = self.excepthook
-
-    def excepthook(self, ex_cls, ex, tb):
-        """ Kill all children when script crashes """
-        # log the traceback in a readable format
-        self.logger.critical(''.join(traceback.format_tb(tb)))
-        # log a short summary of the exception
-        self.logger.critical('{0}: {1}'.format(ex_cls, ex))
-        # kill the kids
-        for p in multiprocessing.active_children():
-            p.terminate()
-        sys.exit()
 
     def make_info_file(self):
         """ Create the  file and energy file """
@@ -396,26 +440,8 @@ class Manager:
         directories["element_results"] = element_results
         mkdir(element_results)
 
-        # mass_jobs contains the subprocesses
-        mass_jobs = []
-
         for mass in self.user_input['mass'][element]:
-            if self.args.multi_mass:
-                """ Use multiprocessing for each mass """
-                # set up the subprocess
-                mass_job = multiprocessing.Process(target=self.run_mass,
-                                                   args=(mass, talys_input, directories, ))
-                # keep a reference of it to shut it down 
-                mass_jobs.append(mass_job)
-                # and start it
-                mass_job.start()
-            else:
-                # no multiprocessing
-                self.run_mass(mass, talys_input, directories)
-
-        # Wait for the subprocesses in mass_jobs to complete
-        for mass_job in mass_jobs:
-            mass_job.join()
+            self.run_mass(mass, talys_input, directories)
 
     def run_mass(self, mass, talys_input, directories):
         """ Manages the mass-option """
@@ -441,12 +467,7 @@ class Manager:
         directories["isotope_results"] = isotope_results
         mkdir(isotope_results)
 
-        # talys_jobs contains the subprocesses
-        talys_jobs = []
-
-        # the queue is used to track the completed subprocesses.
-        # a queue is used since it is multiprocessing-safe
-        self.talys_queue = multiprocessing.Queue()
+        current_rank = 1
         for mm, lm, s, o in product(self.user_input['massmodel'], self.user_input['ldmodel'], self.user_input['strength'], self.user_input['optical']):
 
             # split optical input into TALYS variable and value
@@ -468,7 +489,7 @@ class Manager:
                 self.make_header(talys_input, variable_directory, o)
             except Exception as exc:
                 # no biggie. Just print an error and move on
-                self.logger.error("An error occured while writing header for a={} e={} mm={} lm={} s={} o={}:\n{}".format(
+                logger.error("An error occured while writing header for a={} e={} mm={} lm={} s={} o={}:\n{}".format(
                     a, e, mm, lm, s, o, exc))
                 continue
 
@@ -487,102 +508,9 @@ class Manager:
             directories["error_file"] = error_file
             directories["src_error"] = src_error
 
-            # run TALYS
-            if self.args.multi:
-                """ Use multiprocessing on each run of talys"""
-                # if --processes is not set, jump over this
-                if self.args.processes > 0:
-                    # only pause if the limit set by --processes is reached
-                    if len(talys_jobs) >= self.args.processes:
-                        """
-                        Use the set number of processes. Wait for available
-                        Gets blocked until something is put on the queue, i.e.
-                        one of the subprocesses has finished
-                        """
-                        self.logger.debug("Waiting for available process")
-                        # (pid = process identification)
-                        pid = self.talys_queue.get()
-
-                        # to prevent any fuckups, wait for the process to
-                        # finished if, by any chance, it hasn't.
-                        # it looks like this happens once in a while
-                        time.sleep(1)
-                        for process in talys_jobs:
-                            if process.pid == pid:
-                                if process.is_alive():
-                                    self.logger.warn("%s was not terminated", pid)
-                                    process.join()
-                                # remove it from the list and put a new on
-                                self.logger.debug("Removing %s from list", pid)
-                                talys_jobs.remove(process)
-                                break
-
-                # set up the subprocess
-                talys_job = multiprocessing.Process(
-                    target=self.run_talys, args=(directories, e, ))
-                # keep a reference so it can be shut down
-                talys_jobs.append(talys_job)
-                # and let it loose into the wild!
-                talys_job.start()
-            else:
-                # no multiprocessing
-                self.run_talys(directories, e)
-
-        # Wait for all of the talys_jobs to complete
-        for talys_job in talys_jobs:
-            talys_job.join()
-
-    def run_talys(self, directories, element):
-        """ Runs TALYS """
-        # deepcopy the directories list to prevent multiprocessing mixup
-        directories = copy.deepcopy(directories)
-
-        # prevent headaches
-        assert directories["input_file"] != directories["output_file"]
-
-        # actually run TALYS and time its execution
-        start = time.time()
-        with Cd(directories["variable_directory"]):
-            os.system('talys <{}> {}'.format(
-                directories["input_file"], directories["output_file"]))
-        elapsed = time.strftime("%M:%S", time.localtime(time.time() - start))
-        self.logger.info("Execution time: %s by %s", elapsed,
-                         directories["variable_directory"])
-
-        # move result file to
-        # TALYS-calculations-date-time/original_data/astro-a/ZZ-X/isotope
-        try:
-            shutil.copy(directories["src_result_file"],
-                        directories["dst_result_file"])
-        except IOError as ioe:
-            # if this happens, the cause is always that TALYS hasn't run
-            self.logger.error(
-                "An error occured while trying to copying the result: %s", ioe)
-            mkdir(directories["error_directory"])
-
-            # put head of error file here?
-            error_outfile = open(os.path.join(directories["error_directory"],
-                                              'Z%s%s-error.txt' % (Z_nr[element], element)), 'a+')
-            error_outfile.write('%s\n' % directories["isotope_results"])
-
-            # write talys output.txt to error file:
-            error_talys = open(directories["src_error"], 'r')
-            error_lines = error_talys.readlines()
-
-            error_outfile.write('Talys output file: \n')
-            error_outfile.writelines(str(error_lines))
-            error_outfile.write('\n\n')
-
-            error_talys.close()
-            error_outfile.close()
-
-        self.logger.debug('variable directory = %s', directories["variable_directory"])
-
-        # tell the parent process that the child has finnished
-        # the purpose of this is to let the next process begin
-        self.logger.debug("{} is terminating".format(
-            multiprocessing.current_process().pid))
-        self.talys_queue.put(multiprocessing.current_process().pid)
+            comm.Sendv(mm, dest=current_rank)
+            current_rank += 1
+            #run_talys(directories, e)
 
     def run(self):
         """ Runs the simulations """
@@ -610,15 +538,12 @@ class Manager:
         directories["root_directory"] = self.root_directory
         mkdir(self.root_directory)
 
-        # initialize and start the logging
-        self.init_logger()
-
         # make the info file. If it fails, quit the script
         try:
             self.make_info_file()
         except Exception as e:
-            self.logger.error("An error occured while writing info file: %s", e)
-            sys.exit("Fatal error")
+            logger.error("An error occured while writing info file: %s", e)
+            comm.Abort("Fatal error")
 
         # mkdir: > TALYS-calculations-date-time/original_data
         original_data = '%s/original_data' % self.root_directory
@@ -646,59 +571,53 @@ class Manager:
             mkdir(astro_results)
 
             # Reset the elements job list to prevent multiprocessing mixing
-            element_jobs = []
-
             for element in self.user_input['element']:
-                if self.args.multi_elements:
-                    """ Use multiprocessing for each element """
-                    element_job = multiprocessing.Process(target=self.run_element,
-                                                          args=(element,  talys_input, directories, ))
-                    element_jobs.append(element_job)
-                    element_job.start()
-                else:
-                    self.run_element(element, talys_input, directories)
-
-            # Wait for the processes in element_jobs to complete
-            for element_job in element_jobs:
-                element_job.join()
-
+                self.run_element(element, talys_input, directories)
 
 # Keep the script from running if imported as a module
 if __name__ == "__main__":
-    # Handle the arguments from terminal
-    args = get_args()
+    # Set up MPI. This must always be first
+    # The almighty communcator. Takes care of the ugly stuff
+    comm = MPI.COMM_WORLD
+    # The rank is the current process' ID, so to speak
+    rank = comm.Get_rank()
+    # Size is the number of processes
+    size = comm.Get_size()
 
-    # Set up  logging
-    try:  # Python 2.7+
-        from logging import NullHandler
-    except ImportError:
-        class NullHandler(logging.Handler):
-            def emit(self, record):
-                pass
+    # Only the main process, root, shall create the directories
+    if rank == 0:
+        # Handle the arguments from terminal
+        args = get_args()
 
-    # Convert the input strings to the corresponding logging type
-    args.log = getattr(logging, args.log)
-    args.verbosity = getattr(logging, args.verbosity)
+        # Set up  logging
+        try:  # Python 2.7+
+            from logging import NullHandler
+        except ImportError:
+            class NullHandler(logging.Handler):
+                def emit(self, record):
+                    pass
 
-    # --debug overrules --log and --verbosity
-    if args.debug:
-        args.log = logging.DEBUG
-        args.verbosity = logging.DEBUG
+        # Had a bug, this fixed it. It should't have, but it did. Leave it be
+        logging.basicConfig(level=logging.DEBUG, filename=args.lfilename,
+                            filemode="w", format="%(asctime)s - %(processName)-12s -  %(levelname)-8s - %(message)s")
+        logging.getLogger("__name__").addHandler(NullHandler())
+        logger = init_logger(args)
+                
+        # sys.excepthook is what deals with an unhandled exception
+        sys.excepthook = excepthook
 
-    # Had a bug, this fixed it. It should't have, but it did. Leave it be
-    logging.basicConfig(level=logging.DEBUG, filename=args.lfilename,
-                        filemode="w", format="%(asctime)s - %(processName)-12s -  %(levelname)-8s - %(message)s")
-    logging.getLogger("__name__").addHandler(NullHandler())
+        # Get the options
+        options = import_options()
 
-    # Get the options
-    options = import_options()
+        # If --combinations, print the combinations and exit
+        if args.combinations:
+            print("Astro: {}\nElements: {}\nMasses: {}\nRest: {}\nTotal: {}".format(
+                *count_combinations(options)))
+            comm.Abort()
 
-    # If --combinations, print the combinations and exit
-    if args.combinations:
-        print("Astro: {}\nElements: {}\nMasses: {}\nRest: {}\nTotal: {}".format(
-            *count_combinations(options)))
-        sys.exit()
-
-    # Create an instance of Manager to run the simulations
-    simulations = Manager(user_input=options, args=args)
-    simulations.run()
+            # Create an instance of Manager to run the simulations
+            simulations = Manager(user_input=options, args=args)
+            simulations.run()
+    else:
+        # The other processes run TALYS, but must wait for the root
+        wait_for_root()

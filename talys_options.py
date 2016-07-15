@@ -17,45 +17,26 @@ output_file = 'output.txt'
 energy_file = 'energies.txt'
 
 #element
-element = 'Ce', 'Pr'
+element = 'Pm'
 
 #projectile
 projectile = 'n'
 
-#mass = 76
 mass = {'Ce': [156, 160, 158, 160, 162, 163, 164],
-        'Pr':[158, 163, 160]}
-#mass = 86, 87, 88, 110, 300, 241
+        'Pr':[158, 163, 160],
+	'Pm':[168]}
 
-#massmodel = 3
-massmodel = 1, 2, 3
+massmodel = 1
 
-ldmodel = 3, 3
-#ldmodel = 2, 3, 1
-#ldmodel = 1, 2, 3, 4
+ldmodel = 6
 
-strength = 1, 2
-#strength = 1, 2, 3, 4
+strength = 2
 
 gnorm = 1.
 
 optical = 'localomp n', 'jlmomp y'
 
-
-#localomp = ['n', 'y']
-
-#jlmomp = 'y'
-#jlmomp = 'n' , 'y'
-#jlmomp = ['y', 'n']
-#jlmomp = ['y', 'h']
-
-
-#astro = 'y'
 astro = 'y'
-
-#epr = 50
-#gpr = 34
-#spr = 70
 
 preequilibrium = 'y'
 fileresidual = 'y'
