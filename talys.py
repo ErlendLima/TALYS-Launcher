@@ -53,7 +53,7 @@ def import_options():
 
     user_input_keys = []
     user_input_values = []
-    for key, value in talys_options.__dict__.iteritems():
+    for key, value in talys_options.__dict__.items():
         if '__' not in key:
             user_input_keys.append(key)
             user_input_values.append(value)
@@ -110,7 +110,7 @@ def make_iterable(dictionary):
             # user_input[key] = [user_input[key]]
 
     # check if every item in user given list is unique
-    for key, value in new_dict.iteritems():
+    for key, value in new_dict.items():
 
         try:
             # if variable tuple or list => new list with value only once
@@ -124,7 +124,7 @@ def make_iterable(dictionary):
         except TypeError:
             # if variable == dict => new dict with value only once inside
             # user_input[key]
-            for keys, values in value[0].iteritems():
+            for keys, values in value[0].items():
                 if len(set(values)) != len(values):
                     newlist = []
                     for val in values:
@@ -215,9 +215,13 @@ def excepthook(ex_cls, ex, tb):
 
 
 def wait_for_root():
-    data = np.zeros()
-    comm.Recv(data, source=MPI.ANY_SOURCE)
-    print data
+    while True:
+        print(rank, "waiting for data...")
+        directories = comm.recv(source=0)
+        if "execution_is_done" in directories:
+            break
+        run_talys(directories, directories["element"])
+        comm.Send(np.array([rank]), dest=0)
 
 
 def run_talys(directories, element):
@@ -233,9 +237,9 @@ def run_talys(directories, element):
     with Cd(directories["variable_directory"]):
         os.system('talys <{}> {}'.format(
             directories["input_file"], directories["output_file"]))
-        elapsed = time.strftime("%M:%S", time.localtime(time.time() - start))
-        logger.info("Execution time: %s by %s", elapsed,
-                    directories["variable_directory"])
+    elapsed = time.strftime("%M:%S", time.localtime(time.time() - start))
+    print("Execution time: %s by %s", elapsed,
+          directories["variable_directory"])
 
     # move result file to
     # TALYS-calculations-date-time/original_data/astro-a/ZZ-X/isotope
@@ -243,28 +247,30 @@ def run_talys(directories, element):
         shutil.copy(directories["src_result_file"],
                     directories["dst_result_file"])
     except IOError as ioe:
+        print("Error")
         # if this happens, the cause is always that TALYS hasn't run
-        logger.error(
-            "An error occured while trying to copying the result: %s", ioe)
-        mkdir(directories["error_directory"])
+        #logger.error(
+        #    "An error occured while trying to copying the result: %s", ioe)
+        # mkdir(directories["error_directory"])
 
         # put head of error file here?
-        error_outfile = open(os.path.join(directories["error_directory"],
-                                          'Z%s%s-error.txt' % (Z_nr[element], element)), 'a+')
-        error_outfile.write('%s\n' % directories["isotope_results"])
+        #error_outfile = open(os.path.join(directories["error_directory"],
+        #                                  'Z%s%s-error.txt' % (Z_nr[element], element)), 'a+')
+        # error_outfile.write('%s\n' % directories["isotope_results"])
 
-        # write talys output.txt to error file:
-        error_talys = open(directories["src_error"], 'r')
-        error_lines = error_talys.readlines()
+        # # write talys output.txt to error file:
+        # error_talys = open(directories["src_error"], 'r')
+        # error_lines = error_talys.readlines()
 
-        error_outfile.write('Talys output file: \n')
-        error_outfile.writelines(str(error_lines))
-        error_outfile.write('\n\n')
+        # error_outfile.write('Talys output file: \n')
+        # error_outfile.writelines(str(error_lines))
+        # error_outfile.write('\n\n')
 
-        error_talys.close()
-        error_outfile.close()
+        # error_talys.close()
+        # error_outfile.close()
 
-    logger.debug('variable directory = %s', directories["variable_directory"])
+    #logger.debug('variable directory = %s', directories["variable_directory"])
+
 
 """
 ##########################################
@@ -339,7 +345,7 @@ class Manager:
             "name of output file:", padding_size, input['output_file']))
         outfile.write('\n\nVariable input:')
 
-        for value, key in input.iteritems():
+        for value, key in input.items():
             outfile.write('\n{:<{}s} {}' .format(
                 value + ':',  padding_size, key))
 
@@ -403,7 +409,7 @@ class Manager:
         talys_input2.pop('input_file')
 
         # Write the keyword and corresponding value
-        for key, value in talys_input2.iteritems():
+        for key, value in talys_input2.items():
             outfile_input.write('{} {} \n'.format(key, str(value)))
 
         # Bad things happen if the file isn't closed
@@ -468,6 +474,7 @@ class Manager:
         mkdir(isotope_results)
 
         current_rank = 1
+        send_to_rank = np.array([1])
         for mm, lm, s, o in product(self.user_input['massmodel'], self.user_input['ldmodel'], self.user_input['strength'], self.user_input['optical']):
 
             # split optical input into TALYS variable and value
@@ -508,12 +515,23 @@ class Manager:
             directories["error_file"] = error_file
             directories["src_error"] = src_error
 
-            comm.Sendv(mm, dest=current_rank)
+            if current_rank >= comm.size:
+                logger.info("Waiting for available process")
+                comm.Recv(send_to_rank, source=MPI.ANY_SOURCE)
+                current_rank -= 1
+
+            directories["element"] = e
+            logger.debug("Sending to %s", str(send_to_rank))
+            comm.send(directories, dest=send_to_rank[0])
             current_rank += 1
+            send_to_rank = np.array([current_rank])
+            logger.debug("Current rank %s, sent", current_rank)    
             #run_talys(directories, e)
+        logger.info("Done")
 
     def run(self):
         """ Runs the simulations """
+        logger.info("Running...")
         # do a deepcopy to prevent multiprocessing mixing
         talys_input = copy.deepcopy(self.user_input)
 
@@ -588,7 +606,6 @@ if __name__ == "__main__":
     if rank == 0:
         # Handle the arguments from terminal
         args = get_args()
-
         # Set up  logging
         try:  # Python 2.7+
             from logging import NullHandler
@@ -602,10 +619,8 @@ if __name__ == "__main__":
                             filemode="w", format="%(asctime)s - %(processName)-12s -  %(levelname)-8s - %(message)s")
         logging.getLogger("__name__").addHandler(NullHandler())
         logger = init_logger(args)
-                
         # sys.excepthook is what deals with an unhandled exception
-        sys.excepthook = excepthook
-
+        #sys.excepthook = excepthook
         # Get the options
         options = import_options()
 
@@ -616,8 +631,9 @@ if __name__ == "__main__":
             comm.Abort()
 
             # Create an instance of Manager to run the simulations
-            simulations = Manager(user_input=options, args=args)
-            simulations.run()
+        simulations = Manager(user_input=options, args=args)
+        simulations.run()
+        comm.bcast({"execution_is_done"})
     else:
         # The other processes run TALYS, but must wait for the root
         wait_for_root()
