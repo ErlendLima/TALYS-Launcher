@@ -1,11 +1,20 @@
-import json
-from pprint import pprint
-import time
-import os
+from __future__ import print_function    # Changes print to Python 3's print. Fixes  a few bugs
+import numpy as np                       # Linspace
+import time                              # Time and date
+from itertools import product            # Nested for-loops
+import sys                               # Functions to access system functions
+import os                                # Functions to access IO of the OS
+import shutil                            # High-level file manegement
+import platform                          # Information about the platform
+import logging                           # Logging progress from the processes
+import argparse                          # Parsing arguments given in terminal
+import copy                              # For deepcopy
+import traceback                         # To log tracebacks
+from mpi4py import MPI                   # For multiprocessing and Abel
+import json                              # 
 from talys import make_iterable
-from itertools import product
 import operator
-import sys
+
 
 class Input:
 
@@ -67,49 +76,80 @@ def recursively_find_key(dictionary, key):
                 return match
 
 
-def run_rest(user, path):
-    path = os.path.join(path)
-    pathh = os.path.join(path, user.keywords["mass"])
+class Dict():
+    def __init__(self):
+        self._dict = {}
 
-    keywords = []
-    values = []
-    # have the keys in alphabetical order
-    sorted_keys = user.keywords.keys()
-    sorted_keys.sort()
-    for sorted_key in sorted_keys:
-        # only use keywords that vary
-        if len(user.keywords[sorted_key]) > 1 and sorted_key != "element" and sorted_key != "mass":
-            # both lists are in "alphabetical order" and corresponding
-            # key-value pair have the same index
-            keywords.append(sorted_key)
-            values.append(user[sorted_key])
+    def __call__(self, key, path):
+        if not os.path.exists(path):
+            print("Making dir ", path)
+        self._dict[key] = path
 
-    # 1) append the conditional names to the keywords, since they
-    # are the one to be chosen from. This is undone at 2)
-    for condition in user.conditionals:
-        values.append(condition.keys())
+    def __getitem__(self, key):
+        return self._dict[key]
 
-    for vals in product(*values):
-        # 2) splits the result back into keywords and conditions
-        keywordvals = vals[:len(keywords)]
-        conditionkeys = vals[len(keywords):]
+class Manager():
+    def __init__(self, input):
+        self.input = input
+        self.directories = Dict()
+        self.currOrig = ''
+        self.currRes  = ''
 
-        # name the directory according to the alphabetical order and value
-        # of the keyword
-        name = ''
-        for s in keywordvals:
-            name = "{}-{}".format(name, s)
-            # remove the unecessary -
-        name = name[1:]
+    def run(self):
+        if MPI.COMM_WORLD.Get_rank() == 0:
+            # If root process
+            pass
+        else:
+            # All other processes
+            pass
 
-        # name the directory according to the chosen condition
-        for key in conditionkeys:
-            name = "{}-{}-{}".format(name, key, user.get_condition_val(key))
+    def run_element(self, element):
+        self.currDir = os.path.join(self.currOrig, element)
+        self.directories("element", self.currOrig)
+        for isotope in self.input["mass"]:
+            
 
-            pathhh = os.path.join(pathh, name)
-            print pathhh
-
-
+    def run_rest(self, user, path):
+        path = os.path.join(path)
+        pathh = os.path.join(path, user.keywords["mass"])
+    
+        keywords = []
+        values = []
+        # have the keys in alphabetical order
+        sorted_keys = user.keywords.keys()
+        sorted_keys.sort()
+        for sorted_key in sorted_keys:
+            # only use keywords that vary
+            if len(user.keywords[sorted_key]) > 1 and sorted_key != "element" and sorted_key != "mass":
+                # both lists are in "alphabetical order" and corresponding
+                # key-value pair have the same index
+                keywords.append(sorted_key)
+                values.append(user[sorted_key])
+    
+        # 1) append the conditional names to the keywords, since they
+        # are the one to be chosen from. This is undone at 2)
+        for condition in user.conditionals:
+            values.append(condition.keys())
+    
+        for vals in product(*values):
+            # 2) splits the result back into keywords and conditions
+            keywordvals = vals[:len(keywords)]
+            conditionkeys = vals[len(keywords):]
+    
+            # name the directory according to the alphabetical order and value
+            # of the keyword
+            name = ''
+            for s in keywordvals:
+                name = "{}-{}".format(name, s)
+                # remove the unecessary -
+            name = name[1:]
+    
+            # name the directory according to the chosen condition
+            for key in conditionkeys:
+                name = "{}-{}-{}".format(name, key, user.get_condition_val(key))
+    
+                pathhh = os.path.join(pathh, name)
+                print pathhh
 def mkdir(path):
     if not os.path.exists(path):
         print "Making dir", path
@@ -130,6 +170,7 @@ def search(user, dir, path):
 
 
 if __name__ == "__main__":
+    
     user = Input()
 
     date = time.strftime('%y')

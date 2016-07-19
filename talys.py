@@ -7,7 +7,7 @@
 Imports
 ##########################################
 """
-
+from __future__ import print_function    # Changes print to Python 3's print. Fixes  a few bugs
 import numpy as np                       # Linspace
 import time                              # Time and date
 from itertools import product            # Nested for-loops
@@ -219,6 +219,7 @@ def wait_for_root():
         print(rank, "waiting for data...")
         directories = comm.recv(source=0)
         if "execution_is_done" in directories:
+            print("{} is breaking...".format(rank))
             break
         run_talys(directories, directories["element"])
         comm.Send(np.array([rank]), dest=0)
@@ -235,7 +236,7 @@ def run_talys(directories, element):
     # actually run TALYS and time its execution
     start = time.time()
     with Cd(directories["variable_directory"]):
-        os.system('talys <{}> {}'.format(
+        comm.Spawn('talys <{}> {}'.format(
             directories["input_file"], directories["output_file"]))
     elapsed = time.strftime("%M:%S", time.localtime(time.time() - start))
     print("Execution time: %s by %s", elapsed,
@@ -561,7 +562,7 @@ class Manager:
             self.make_info_file()
         except Exception as e:
             logger.error("An error occured while writing info file: %s", e)
-            comm.Abort("Fatal error")
+            comm.Abort()
 
         # mkdir: > TALYS-calculations-date-time/original_data
         original_data = '%s/original_data' % self.root_directory
@@ -601,6 +602,8 @@ if __name__ == "__main__":
     rank = comm.Get_rank()
     # Size is the number of processes
     size = comm.Get_size()
+    info = comm.Get_info()
+    print("Rank: {}".format(MPI.COMM_WORLD.Get_group()))
 
     # Only the main process, root, shall create the directories
     if rank == 0:
@@ -633,7 +636,9 @@ if __name__ == "__main__":
             # Create an instance of Manager to run the simulations
         simulations = Manager(user_input=options, args=args)
         simulations.run()
-        comm.bcast({"execution_is_done"})
+        for i in range(1, size):
+            print("Killing", i)
+            comm.send({"execution_is_done":"True"}, dest=i)
     else:
         # The other processes run TALYS, but must wait for the root
         wait_for_root()

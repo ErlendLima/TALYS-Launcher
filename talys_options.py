@@ -17,20 +17,21 @@ output_file = 'output.txt'
 energy_file = 'energies.txt'
 
 #element
-element = 'Pm'
+element = 'Ce'
 
 #projectile
 projectile = 'n'
 
 mass = {'Ce': [156, 160, 158, 160, 162, 163, 164],
+	'Sm':[169],
         'Pr':[158, 163, 160],
 	'Pm':[168]}
 
-massmodel = 1, 2, 3
+massmodel = 1
 
 ldmodel = 6
 
-strength = 2
+strength = 1
 
 gnorm = 1.
 
