@@ -10,7 +10,7 @@ import logging                           # Logging progress from the processes
 import argparse                          # Parsing arguments given in terminal
 import copy                              # For deepcopy
 import traceback                         # To log tracebacks
-from mpi4py import MPI                   # For multiprocessing and Abel
+#from mpi4py import MPI                   # For multiprocessing and Abel
 import json                              # 
 from talys import make_iterable
 import operator
@@ -96,18 +96,17 @@ class Manager():
         self.currRes  = ''
 
     def run(self):
-        if MPI.COMM_WORLD.Get_rank() == 0:
-            # If root process
-            pass
-        else:
-            # All other processes
-            pass
+        pass
 
     def run_element(self, element):
-        self.currDir = os.path.join(self.currOrig, element)
+        self.currOrig = os.path.join(self.currOrig, element)
         self.directories("element", self.currOrig)
         for isotope in self.input["mass"]:
-            
+            self.run_isotope(self, isotope)
+
+    def run_isotope(self, isotope):
+        self.currOrig = os.path.join(self.currOrig, isotope)
+        self.directories("mass", self.currOrig)
 
     def run_rest(self, user, path):
         path = os.path.join(path)

@@ -19,8 +19,13 @@ import logging                           # Logging progress from the processes
 import argparse                          # Parsing arguments given in terminal
 import copy                              # For deepcopy
 import traceback                         # To log tracebacks
-from mpi4py import MPI                   # For multiprocessing and Abel
 
+try:
+    from mpi4py import MPI
+    CAN_USE_MPI = True
+except ImportError:
+    CAN_USE_MPI = False
+    
 """
 ##########################################
 Global Variables
@@ -164,6 +169,9 @@ def get_args():
     parser.add_argument("-p", "--processes",
                         help="Set the number of processes the script will use. Should be less than or equal to number of CPU cores",
                         type=int, default=0)
+    parser.add_argument("-M", "--MPI",
+                        help="Flag for when running MPI",
+                        action="store_true")
 
     args = parser.parse_args()
     # Convert the input strings to the corresponding logging type
@@ -211,19 +219,7 @@ def excepthook(ex_cls, ex, tb):
     logger.critical(''.join(traceback.format_tb(tb)))
     # log a short summary of the exception
     logger.critical('{0}: {1}'.format(ex_cls, ex))
-    comm.Abort()
-
-
-def wait_for_root():
-    while True:
-        print(rank, "waiting for data...")
-        directories = comm.recv(source=0)
-        if "execution_is_done" in directories:
-            print("{} is breaking...".format(rank))
-            break
-        run_talys(directories, directories["element"])
-        comm.Send(np.array([rank]), dest=0)
-
+    sys.exit()
 
 def run_talys(directories, element):
     """ Runs TALYS """
@@ -239,8 +235,8 @@ def run_talys(directories, element):
         comm.Spawn('talys <{}> {}'.format(
             directories["input_file"], directories["output_file"]))
     elapsed = time.strftime("%M:%S", time.localtime(time.time() - start))
-    print("Execution time: %s by %s", elapsed,
-          directories["variable_directory"])
+    logger.info("Execution time: %s by %s", elapsed,
+                directories["variable_directory"])
 
     # move result file to
     # TALYS-calculations-date-time/original_data/astro-a/ZZ-X/isotope
@@ -306,6 +302,12 @@ class Manager:
     def __init__(self, user_input, args):
         self.user_input = user_input  # Arguments read from file
         self.args = args              # Arguments read from terminal
+        self.work_dir = "work"
+        self.counter = 0
+        #if os.path.exists(self.work_dir):
+        #    sys.exit("Work_dir already exists")
+        #else:
+        mkdir(self.work_dir)
 
     def make_info_file(self):
         """ Create the  file and energy file """
@@ -383,11 +385,11 @@ class Manager:
         # need projectile, input_file, output_file twice
         projectile = talys_input2.pop(['projectile'][0])
 
-        outfile_input = open(os.path.join(
-            variable_directory, self.user_input["input_file"][0]), 'w')
+        outfile_name = os.path.join(variable_directory, self.user_input["input_file"][0])
+        outfile_input = open(outfile_name, 'w')
         outfile_input.write('###################### \n')
         outfile_input.write('## TALYS input file ## \n')
-        outfile_input.write('##  {}{}({},g){}{}   ## \n'.format(
+        outfile_input.write('##  {}{}({},g){}{}  ## \n'.format(
             m, e, projectile, m + 1, e))
         outfile_input.write('###################### \n \n')
         outfile_input.write('# All keywords are explained in README. \n \n')
@@ -424,6 +426,8 @@ class Manager:
 
         # copy energy file to variable directory
         shutil.copy(src_energy_new, dst_energy_input)
+        shutil.copy(src_energy_new, os.path.join(self.work_dir, src_energy))
+        shutil.copy(outfile_name, os.path.join(self.work_dir, "input_{}.txt".format(self.counter)))
 
     def run_element(self, element, talys_input, directories):
         """ Manages the element-option """
@@ -474,8 +478,6 @@ class Manager:
         directories["isotope_results"] = isotope_results
         mkdir(isotope_results)
 
-        current_rank = 1
-        send_to_rank = np.array([1])
         for mm, lm, s, o in product(self.user_input['massmodel'], self.user_input['ldmodel'], self.user_input['strength'], self.user_input['optical']):
 
             # split optical input into TALYS variable and value
@@ -501,34 +503,24 @@ class Manager:
                     a, e, mm, lm, s, o, exc))
                 continue
 
+            self.counter += 1
             # prepare all of the directory names so multiprocessing won't interfer
-            src_result_file = "{}/astrorate.tot".format(variable_directory)
-            dst_result_file = "{}/{}{}{}{}-{}-{}-{}-{}-{}-astrorate.tot".format(
-                isotope_results, m, e, Z_nr[e], m + 1, mm, lm, s, optical_name, optical_value)
-            # dst_result_file = '%s/%s%s-rp%s%s-0%g-0%g-0%g-%s-%s.tot' %(isotope_results, m, e, Z_nr[e], m+1, mm, lm, s, optical_name, optical_value)
-            error_directory = '%s/error' % self.root_directory
-            error_file = '%s/%s-error.txt' % (self.root_directory, Z_nr[e])
-            src_error = '%s/output.txt' % variable_directory
+            # src_result_file = "{}/astrorate.tot".format(variable_directory)
+            # dst_result_file = "{}/{}{}{}{}-{}-{}-{}-{}-{}-astrorate.tot".format(
+            #     isotope_results, m, e, Z_nr[e], m + 1, mm, lm, s, optical_name, optical_value)
+            # # dst_result_file = '%s/%s%s-rp%s%s-0%g-0%g-0%g-%s-%s.tot' %(isotope_results, m, e, Z_nr[e], m+1, mm, lm, s, optical_name, optical_value)
+            # error_directory = '%s/error' % self.root_directory
+            # error_file = '%s/%s-error.txt' % (self.root_directory, Z_nr[e])
+            # src_error = '%s/output.txt' % variable_directory
 
-            directories["src_result_file"] = src_result_file
-            directories["dst_result_file"] = dst_result_file
-            directories["error_directory"] = error_directory
-            directories["error_file"] = error_file
-            directories["src_error"] = src_error
-
-            if current_rank >= comm.size:
-                logger.info("Waiting for available process")
-                comm.Recv(send_to_rank, source=MPI.ANY_SOURCE)
-                current_rank -= 1
-
-            directories["element"] = e
-            logger.debug("Sending to %s", str(send_to_rank))
-            comm.send(directories, dest=send_to_rank[0])
-            current_rank += 1
-            send_to_rank = np.array([current_rank])
-            logger.debug("Current rank %s, sent", current_rank)    
+            # directories["src_result_file"] = src_result_file
+            # directories["dst_result_file"] = dst_result_file
+            # directories["error_directory"] = error_directory
+            # directories["error_file"] = error_file
+            # directories["src_error"] = src_error
+            # directories["element"] = e
+            
             #run_talys(directories, e)
-        logger.info("Done")
 
     def run(self):
         """ Runs the simulations """
@@ -595,50 +587,31 @@ class Manager:
 
 # Keep the script from running if imported as a module
 if __name__ == "__main__":
-    # Set up MPI. This must always be first
-    # The almighty communcator. Takes care of the ugly stuff
-    comm = MPI.COMM_WORLD
-    # The rank is the current process' ID, so to speak
-    rank = comm.Get_rank()
-    # Size is the number of processes
-    size = comm.Get_size()
-    info = comm.Get_info()
-    print("Rank: {}".format(MPI.COMM_WORLD.Get_group()))
+   # Handle the arguments from terminal
+   args = get_args()
+   # Set up  logging
+   try:  # Python 2.7+
+       from logging import NullHandler
+   except ImportError:
+       class NullHandler(logging.Handler):
+           def emit(self, record):
+               pass
 
-    # Only the main process, root, shall create the directories
-    if rank == 0:
-        # Handle the arguments from terminal
-        args = get_args()
-        # Set up  logging
-        try:  # Python 2.7+
-            from logging import NullHandler
-        except ImportError:
-            class NullHandler(logging.Handler):
-                def emit(self, record):
-                    pass
+   # Had a bug, this fixed it. It should't have, but it did. Leave it be
+   logging.basicConfig(level=logging.DEBUG, filename=args.lfilename,
+                       filemode="w", format="%(asctime)s - %(processName)-12s -  %(levelname)-8s - %(message)s")
+   logging.getLogger("__name__").addHandler(NullHandler())
+   logger = init_logger(args)
+   # sys.excepthook is what deals with an unhandled exception
+   #sys.excepthook = excepthook
+   # Get the options
+   options = import_options()
 
-        # Had a bug, this fixed it. It should't have, but it did. Leave it be
-        logging.basicConfig(level=logging.DEBUG, filename=args.lfilename,
-                            filemode="w", format="%(asctime)s - %(processName)-12s -  %(levelname)-8s - %(message)s")
-        logging.getLogger("__name__").addHandler(NullHandler())
-        logger = init_logger(args)
-        # sys.excepthook is what deals with an unhandled exception
-        #sys.excepthook = excepthook
-        # Get the options
-        options = import_options()
+   # If --combinations, print the combinations and exit
+   if args.combinations:
+       print("Astro: {}\nElements: {}\nMasses: {}\nRest: {}\nTotal: {}".format(
+           *count_combinations(options)))
 
-        # If --combinations, print the combinations and exit
-        if args.combinations:
-            print("Astro: {}\nElements: {}\nMasses: {}\nRest: {}\nTotal: {}".format(
-                *count_combinations(options)))
-            comm.Abort()
-
-            # Create an instance of Manager to run the simulations
-        simulations = Manager(user_input=options, args=args)
-        simulations.run()
-        for i in range(1, size):
-            print("Killing", i)
-            comm.send({"execution_is_done":"True"}, dest=i)
-    else:
-        # The other processes run TALYS, but must wait for the root
-        wait_for_root()
+    # Create an instance of Manager to run the simulations
+   simulations = Manager(user_input=options, args=args)
+   simulations.run()
