@@ -1,20 +1,25 @@
 # Write this file in Python-syntax
+# Prefix the script keywords with s_
 
+###################
+# Script keywords #
+###################
 #Energies
-energy_file = 'energies.txt'
+s_energy_file = 'energies.txt'
 
-E1 = 0.0025E-03
-E2 = 5000E-03
-step = 100
+s_E1 = 0.0025E-03
+s_E2 = 5000E-03
+s_step = 100
 
 # name of input file:
-input_file = 'input.txt'
+s_input_file = 'input.txt'
 
 #name of output file:
-output_file = 'output.txt'
+s_output_file = 'output.txt'
 
-#name of energy file:
-energy_file = 'energies.txt'
+##################
+# TALYS keywords #
+##################
 
 #element
 element = 'Ce', 'Pr'
