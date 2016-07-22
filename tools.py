@@ -8,6 +8,22 @@ import argparse
 import os
 import logging
 import copy
+from string import Formatter
+
+class KeyFormatter(Formatter):
+    def get_value(self, field_name, args, kwargs):
+        return kwargs.get(field_name, '')
+
+    def get_field(self, field_name, args, kwargs):
+        first, rest = field_name._formatter_field_name_split()
+        obj = self.get_value(first, args, kwargs)
+
+        for is_attr, i in rest:
+            if is_attr:
+                obj = getattr(obj, i)
+            else:
+                obj = obj.get(i, '')
+        return obj, first
 
 def correct(input_argument):
     """ Function to check syntax of input arguments given by user """

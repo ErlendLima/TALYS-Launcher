@@ -28,6 +28,12 @@ class Basic_reader(object):
             except KeyError:
                 return self.script_keywords[index]
 
+    def convert(self, var):
+        try:
+            return float(var)
+        except Exception as e:
+            return var
+
     def get_condition_val(self, key):
         """ Return the value for a given key in conditionals
         Example:
@@ -52,7 +58,7 @@ class Json_reader(Basic_reader):
         # fill self.keywords
         for key, value in data["keywords"].iteritems():
             if key != "comment":
-                self.keywords[key] = value
+                self.keywords[key] = self.convert(value)
         self.keywords = make_iterable(self.keywords)
 
 
@@ -65,7 +71,7 @@ class Json_reader(Basic_reader):
         # fill self.script_keywords
         for key, value in data["script_keywords"].iteritems():
             if key != "comment":
-                self.script_keywords[key] = value
+                self.script_keywords[key] = self.convert(value)
 
         self.structure = data["structure"]
 

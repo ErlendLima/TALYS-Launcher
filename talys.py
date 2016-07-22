@@ -79,13 +79,28 @@ class Manager:
 
 
     def init_logger(self):
-        """ Set up logging"""
+        """ Set up logging
+        This is the best tool to handle information that should either be
+        printed to the terminal or written to a file. All of the information
+        from both normal and abnormal execution is written to both the terminal
+        and to the log file (default name is talys.log), but debugging
+        information is also written to the log file. To ease troubleshooting,
+        error messages is also written to the error file (default name is
+        error.log).
+        """
 
-        # supress multiprocessing information --processes is not set
+        # use a multiprocessing-safe logger if --processes is set
         if self.args.processes > 0:
             self.logger = multiprocessing.get_logger()
         else:
             self.logger = logging.getLogger()
+
+        # create and add a filter to suppress multiprocessing information
+        class NoMultiProcessingFilter(logging.Filter):
+            def filter(self, record):
+                return not "process" in record.getMessage()
+
+        self.logger.addFilter(NoMultiProcessingFilter())
 
         # File Handler - writes log messages to log file
         log_handle = logging.FileHandler(
@@ -118,7 +133,11 @@ class Manager:
         self.logger.debug(multiprocessing.current_process().pid)
 
     def excepthook(self, ex_cls, ex, tb):
-        """ Kill all children when script crashes """
+        """ Replace the default excepthook
+        the excepthook is called when the script experiences an exception.
+        In order to log the traceback and ensure termination of the child
+        processes, this excepthook replaces the default one
+        """
         # log the traceback in a readable format
         self.logger.critical(''.join(traceback.format_tb(tb)))
         # log a short summary of the exception
@@ -132,9 +151,8 @@ class Manager:
         """ Create the  file and energy file """
         padding_size = 20
         # create file
-        file = '%s-.txt' % self.root_directory
 
-        outfile = open(file, 'w')
+        outfile = open(os.path.join(self.root_directory, "Information.txt"), 'w')
         input = self.options
 
         # write date, time and input  to file
@@ -159,7 +177,7 @@ class Manager:
         outfile.write('\n{:<{}s} {}'.format(
             "energy max:", padding_size, input['E2']))
         outfile.write('\n{:<{}s} {}'.format(
-            "energy step:", padding_size, input['step']))
+            "number of energies:", padding_size, input['N']))
 
         outfile.write('\n\n{:<{}s} {}'.format(
             "name of input file:", padding_size, input['input_file']))
@@ -174,11 +192,11 @@ class Manager:
         outfile.write('\n\nEnergies: \n')
 
         # create energy input
-        energies = np.linspace(float(self.options['E1'][0]),
-                               float(self.options['step'][0]),
-                               float(self.options['E2'][0]))
+        energies = np.linspace(float(self.options['E1']),
+                               float(self.options['E2']),
+                               float(self.options['N']))
         # outfile named energy_file
-        outfile_energy = open(self.options['energy'][0], 'w')
+        outfile_energy = open(os.path.join(self.root_directory, self.options['energy'][0]), 'w')
         # write energies to energy_file and file in one column
         for Ei in energies:
             # write energies to file in column
@@ -189,13 +207,6 @@ class Manager:
         outfile_energy.close()
         outfile.close()
 
-        # move energy_file and info_file to:
-        # > TALYS-calculations-date-time
-        src = file
-        dst_energy = self.root_directory
-        shutil.move(self.options['energy'][0], dst_energy)
-        shutil.move(src, dst_energy)
-
     def make_input_file(self, keywords, directories):
         keywords = copy.deepcopy(keywords)
 
@@ -205,9 +216,11 @@ class Manager:
         element = keywords.pop("element")
         energy = keywords.pop('energy')
 
+        # open the file and begin writing
         outfile_input = open(os.path.join(
             directories["rest_directory"],
             self.options["input_file"]), 'w')
+        # This shows the reaction taking place, e.g 159Eu(n,g)160Eu
         reaction_line = '{}{}({},g){}{}'.format(mass, element, projectile,
                                                 int(mass)+1, element)
         outfile_input.write('########################## \n')
@@ -274,34 +287,51 @@ class Manager:
         # change to "current" directories
         directories["current_orig"] = directories["original_data"]
         directories["current_res"] = directories["results_data"]
+        key = self.keygen()
+        #self.run_deeper(keywords, directories, key)
         for element in self.options["element"]:
             keywords["element"] = element
             self.run_element(element, keywords, directories)
 
-        self.logger("Total elapsed time: %s", time.time()-start)
+        elapsed = time.strftime("%H:%M:%S", time.localtime(time.time() - start))
+        self.logger("Total elapsed time: %s", elapsed)
 
     def keygen(self):
         #TODO: Add Z_nr[]
-        iterator = {
-            "element": "{element}",
-            "mass": "{mass}{element}",
-            "rest": ""
-        }
-        for key, value in iterator.iteritems():
-            yield (key, value)
+        iterator = [
+            {"element": "{element}"},
+            {"mass": "{mass[{element}]}{element}"},
+            {"rest": ""},
+        ]
+        for item in iterator:
+            yield (item.keys()[0], item.values()[0])
 
-    def run_deeper(self, keywords, directories):
+    def run_deeper(self, keywords, directories, key):
         # deepcopy the mutable variables to prevent processing mixup
         keywords = copy.deepcopy(keywords)
         directories = copy.deepcopy(directories)
-
-        directories["current_orig"] = os.path.join(
-            directories["current_orig"], style.format(**keywords))
-        directories["current_res"] = os.path.join(
-            directories["current_res"], style.format(**keywords))
-        mkdir(directories["current_orig"])
-        mkdir(directories["current_res"])
-            
+        raw_input()
+        for name, style in key:
+            print(name, style)
+            print(style.format(**keywords))
+            if name == "rest":
+                self.run_rest(keywords, directories)
+            else:
+                new_keywords = copy.deepcopy(keywords)
+                for keyword in keywords[name]:
+                    print("Current keyword", keyword)
+                    if isinstance(keyword, (dict)):
+                        new_keywords[name] = new_keywords[name][new_keywords["prev_keywords"]]
+                    else:
+                        new_keywords[name] = keyword
+                    new_keywords["prev_keyword"] = keyword
+                    directories["current_orig"] = os.path.join(
+                        directories["current_orig"], style.format(**new_keywords))
+                    directories["current_res"] = os.path.join(
+                        directories["current_res"], style.format(**new_keywords))
+                    mkdir(directories["current_orig"])
+                    mkdir(directories["current_res"])
+                    self.run_deeper(new_keywords, directories, key)
 
     def run_element(self, element, keywords, directories):
         """ Manages the element-option """
@@ -333,14 +363,12 @@ class Manager:
         keywords = copy.deepcopy(keywords)
         directories = copy.deepcopy(directories)
 
-        # mkdir: >
-        # TALYS-calculations-date-time/original_data/astro-a/ZZ-X/isotope
+        # mkdir: > TALYS-calculations-date-time/original_data/astro-a/ZZ-X/isotope
         directories["isotope_original"] = os.path.join(
             directories["current_orig"], "{}{}".format(keywords["mass"], keywords["element"]))
         mkdir(directories["isotope_original"])
 
-        # mkdir: >
-        # TALYS-calculations-date-time/result_data/astro-a/ZZ-X/isotope
+        # mkdir: > TALYS-calculations-date-time/result_data/astro-a/ZZ-X/isotope
         directories["isotope_results"] = os.path.join(
             directories["current_res"], "{}{}".format(keywords["mass"], keywords["element"]))
         mkdir(directories["isotope_results"])
@@ -391,6 +419,10 @@ class Manager:
         self.talys_queue = multiprocessing.Queue()
         # talys_jobs contains the subprocesses
         talys_jobs = []
+        self.counter = multiprocessing.Value('i', 0)
+        self.counter_max = 0
+        for n in product(*values):
+            self.counter_max += 1
 
         for value in product(*values):
             # 2) splits the result back into keywords and conditions
@@ -501,19 +533,33 @@ class Manager:
                                       close_fds=True)
 
         elapsed = time.strftime("%M:%S", time.localtime(time.time() - start))
-        self.logger.info("Execution time: %s by %s", elapsed, keywords["name"])
+        info = "{mass}{element}-{name}".format(**keywords)
+        self.counter.value += 1
+        self.logger.info("(%s/%s) Execution time: %s by %s", self.counter.value,
+        self.counter_max, elapsed, info)
+
+        # the filesize of output_file is an indicator of whether the execution
+        # was successfull or not
+        path =  os.path.join(
+            directories["current_orig"], self.options["output_file"])
+        if os.path.getsize(path) < 600:
+            # execution failed. Open the file and log the output
+            with open(path, "r") as output_file:
+                msg = ''.join(output_file.readlines()).rstrip()
+            self.logger.error(msg[1:])
 
         # move result file to
         # TALYS-calculations-date-time/original_data/astro-a/ZZ-X/isotope
-        try:
-            shutil.copy(os.path.join(directories["current_orig"], "astrorate.tot"),
-                        os.path.join(directories["current_res"], "{}-astrorate.tot".format(keywords["name"])))
-        except Exception as exc:
-            # if this happens, the cause is always that TALYS hasn't run
-            # therefore, print the STDOUT/STDERR from talys
-            error = str(process.stdout.read()).rstrip()
-            error = error if error else exc
-            self.logger.error("An error occured while copying the result: %s", error)
+        # try:
+        #     shutil.copy(os.path.join(directories["current_orig"], "astrorate.tot"),
+        #                 os.path.join(directories["current_res"], "{}-astrorate.tot".format(keywords["name"])))
+        # except Exception as exc:
+        #     # if this happens, the cause is always that TALYS hasn't run
+        #     # therefore, print the STDOUT/STDERR from talys
+        #     #error = str(process.stdout.read()).rstrip()
+        #     #error = error if error else exc
+        #     self.logger.error("An error occured while copying the result: %s - %s",
+        #                       process, exc)
 
         # tell the parent process that the child has finnished
         # the purpose of this is to let the next process begin
