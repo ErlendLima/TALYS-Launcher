@@ -5,10 +5,12 @@ file
 """
 
 import argparse
+import sys
 import os
 import logging
 import copy
 from string import Formatter
+
 
 class KeyFormatter(Formatter):
     def get_value(self, field_name, args, kwargs):
@@ -29,6 +31,7 @@ class KeyFormatter(Formatter):
                 obj = obj.get(i, '')
         return obj, first
 
+
 def correct(input_argument):
     """ Function to check syntax of input arguments given by user """
 
@@ -43,10 +46,12 @@ def correct(input_argument):
         error_message = " please make sure these input arguments are gives as: \n input = 'no' or input = 'yes' \n input = 'n'  or input = 'y' \n input = ['no', 'yes'] or input = ['n', 'y'] \n"
         sys.exit(error_message)
 
+
 def mkdir(directory):
     """ Check if directory exists. If not, create it """
     if not os.path.exists(directory):
         os.makedirs(directory)
+
 
 def make_iterable(dictionary):
     """ Makes every entry in the dictionary iterable and returns the result """
@@ -82,6 +87,7 @@ def make_iterable(dictionary):
                 new_dict[key] = value[0]
     return new_dict
 
+
 def get_args():
     """
     Manages the argparse module.
@@ -94,9 +100,6 @@ def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--debug",
                         help="Show debugging information. Overrules log and verbosity",
-                        action="store_true")
-    parser.add_argument("--combinations",
-                        help="Give a summary over how many TALYS-runs are needed to exhaust all of the combinations",
                         action="store_true")
     parser.add_argument("-l", "--log",
                         help="Set the log level",
@@ -132,6 +135,7 @@ def get_args():
         args.verbosity = logging.DEBUG
 
     return args
+
 
 class Cd:
     """ Simplifies directory mangement """

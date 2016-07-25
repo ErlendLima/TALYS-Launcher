@@ -8,6 +8,7 @@ Imports
 ##########################################
 """
 
+from __future__ import print_function
 import numpy as np                       # Linspace
 import time                              # Time and date
 from itertools import product            # Nested for-loops
@@ -48,19 +49,6 @@ Functions
 ###########################################
 """
 
-def count_combinations(options):
-    """ Returns the combinations of the options to be run """
-    elements = len(options["element"])
-    masses = 0
-    for e in options["element"]:
-        masses += len(options["mass"][e])
-    astro = len(options["astro"])
-    rest = 0
-    options = make_iterable(options)
-    for mm, lm, s, o in product(options['massmodel'], options['ldmodel'], options['strength'], options['optical']):
-        rest += 1
-    return astro, elements, masses, rest, astro * masses * rest
-
 """
 ##########################################
 Classes
@@ -74,15 +62,24 @@ class Manager:
         self.options = options  # Arguments read from file
         self.args = args        # Arguments read from terminal
         self.use_MPI = size > 1
-        if self.use_MPI:
-            self.mpisize = size
+        if self.use_MPI and self.args.processes > 0:
+            print("Multiprocessing can not be used with MPI")
+            comm.Abort()
+        self.mpisize = size
 
         # sys.excepthook is what deals with an unhandled exception
         sys.excepthook = self.excepthook
 
         for n in range(1, self.mpisize):
-            print("sending to", n)
             comm.send(self.options, dest=n, tag=1)
+
+    def __enter__(self, options, args):
+        self.__init__(self, options, args)
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        """ Shut down the children when exiting """
+        for rank in range(self.mpisize):
+            comm.send("stop", dest=rank)
 
     def init_logger(self):
         """ Set up logging
@@ -136,7 +133,10 @@ class Manager:
         self.logger.addHandler(error_handle)
 
         # for debugging purposes
-        self.logger.debug(multiprocessing.current_process().pid)
+        if self.args.processes > 0:
+            self.logger.debug(multiprocessing.current_process().pid)
+        if self.use_MPI:
+            self.logger.warning("Only rank 0 can use logging")
 
     def excepthook(self, ex_cls, ex, tb):
         """ Replace the default excepthook
@@ -521,6 +521,7 @@ class Manager:
                 if current_rank >= self.mpisize:
                     self.logger.debug("Waiting for available process")
                     comm.Recv(send_to_rank, source=MPI.ANY_SOURCE)
+                    print(send_to_rank)
                     current_rank -= 1
                 comm.send((keywords, directories), dest=send_to_rank[0])
                 current_rank[0] += 1
@@ -556,19 +557,21 @@ class Manager:
 
         elapsed = time.strftime("%M:%S", time.localtime(time.time() - start))
         info = "{mass}{element}-{name}".format(**keywords)
-        self.counter.value += 1
-        self.logger.info("(%s/%s) Execution time: %s by %s", self.counter.value,
-                         self.counter_max, elapsed, info)
-
-        # the filesize of output_file is an indicator of whether the execution
-        # was successfull or not
-        path =  os.path.join(
-            directories["current_orig"], self.options["output_file"])
-        if os.path.getsize(path) < 600:
-            # execution failed. Open the file and log the output
-            with open(path, "r") as output_file:
-                msg = ''.join(output_file.readlines()).rstrip()
-            self.logger.error(msg[1:])
+        if not self.use_MPI:
+            self.counter.value += 1
+            self.logger.info("(%s/%s) Execution time: %s by %s", self.counter.value,
+                             self.counter_max, elapsed, info)
+            # the filesize of output_file is an indicator of whether the execution
+            # was successfull or not
+            path = os.path.join(
+                directories["current_orig"], self.options["output_file"])
+            if os.path.getsize(path) < 600:
+                # execution failed. Open the file and log the output
+                with open(path, "r") as output_file:
+                    msg = ''.join(output_file.readlines()).rstrip()
+                self.logger.error(msg[1:])
+        else:
+            print("Execution time: {} by {}".format(elapsed, info))
 
         # move result file to
         # TALYS-calculations-date-time/original_data/astro-a/ZZ-X/isotope
@@ -585,37 +588,30 @@ class Manager:
 
         # tell the parent process that the child has finnished
         # the purpose of this is to let the next process begin
-        self.logger.debug("{} is terminating".format(
-            multiprocessing.current_process().pid))
-        self.talys_queue.put(multiprocessing.current_process().pid)
+        if not self.use_MPI:
+            self.logger.debug("{} is terminating".format(
+                multiprocessing.current_process().pid))
+            self.talys_queue.put(multiprocessing.current_process().pid)
+
 
 # For MPI
 class ChildRunner(Manager):
     # Remove Manager's init
     def __init__(self, rank):
         self.rank = rank
-        class logger():
-            def info(self, *args):
-                print(args)
-            def debug(self, *args):
-                print(args)
-        class counter():
-            def __init__(self, value):
-                self.value = value
-
-        self.logger = logger
-        self.counter = counter(0)
-        self.counter_max = 23
+        self.use_MPI = True
         self.options = comm.recv(source=0, tag=1)
         self.wait_for_root()
 
     def wait_for_root(self):
         while True:
-            keywords, directories = comm.recv(source=0)
-            if "stop" in directories:
-                break
-            self.run_talys(keywords, directories)
-            comm.Send(np.array([self.rank]), dest=0)
+            try:
+                keywords, directories = comm.recv(source=0)
+                if "stop" in directories:
+                    break
+                self.run_talys(keywords, directories)
+            finally:
+                comm.Send(np.array([self.rank]), dest=0)
 
 # Keep the script from running if imported as a module
 if __name__ == "__main__":
@@ -649,15 +645,9 @@ if __name__ == "__main__":
         # Get the options
         options = Json_reader(args.input_filename)
 
-        # If --combinations, print the combinations and exit
-        if args.combinations:
-            print("Astro: {}\nElements: {}\nMasses: {}\nRest: {}\nTotal: {}".format(
-                *count_combinations(options)))
-            sys.exit()
-
         # Create an instance of Manager to run the simulations
-        simulations = Manager(options=options, args=args)
-        simulations.run()
+        with Manager(options=options, args=args) as simulations:
+            simulations.run()
     else:
         # The other processes run TALYS, but must wait for root
         ChildRunner(rank)
