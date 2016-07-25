@@ -18,8 +18,12 @@ class KeyFormatter(Formatter):
         first, rest = field_name._formatter_field_name_split()
         obj = self.get_value(first, args, kwargs)
 
+        print(first, rest)
+        print(obj)
         for is_attr, i in rest:
+            print(is_attr, i)
             if is_attr:
+                print(getattr(obj, i))
                 obj = getattr(obj, i)
             else:
                 obj = obj.get(i, '')

@@ -17,10 +17,10 @@ import shutil                            # High-level file manegement
 import platform                          # Information about the platform
 import multiprocessing                   # Multiprocessing
 import logging                           # Logging progress from the processes
-import argparse                          # Parsing arguments given in terminal
 import copy                              # For deepcopy
 import traceback                         # To log tracebacks
 import subprocess                        # More flexible os.system
+from mpi4py import MPI                   # For supercomputing
 from tools import *
 from input_reader import *
 
@@ -72,11 +72,17 @@ class Manager:
 
     def __init__(self, options, args):
         self.options = options  # Arguments read from file
-        self.args = args              # Arguments read from terminal
+        self.args = args        # Arguments read from terminal
+        self.use_MPI = size > 1
+        if self.use_MPI:
+            self.mpisize = size
 
         # sys.excepthook is what deals with an unhandled exception
         sys.excepthook = self.excepthook
 
+        for n in range(1, self.mpisize):
+            print("sending to", n)
+            comm.send(self.options, dest=n, tag=1)
 
     def init_logger(self):
         """ Set up logging
@@ -287,7 +293,14 @@ class Manager:
         # change to "current" directories
         directories["current_orig"] = directories["original_data"]
         directories["current_res"] = directories["results_data"]
-        key = self.keygen()
+        # key = self.keygen()
+        # fmt = KeyFormatter()
+        # value = {
+        #    "{element}":"Pr",
+        #    "{mass}":{"Pr":128}
+#}
+ #       fmt.format("{mass[{mass}]}", **value)
+  #      sys.exit()
         #self.run_deeper(keywords, directories, key)
         for element in self.options["element"]:
             keywords["element"] = element
@@ -424,6 +437,8 @@ class Manager:
         for n in product(*values):
             self.counter_max += 1
 
+        current_rank = np.array([1])
+        send_to_rank = np.array([1])
         for value in product(*values):
             # 2) splits the result back into keywords and conditions
             keywordvals = value[:len(keys)]
@@ -502,6 +517,14 @@ class Manager:
                 talys_jobs.append(talys_job)
                 # and let it loose into the wild!
                 talys_job.start()
+            elif self.use_MPI:
+                if current_rank >= self.mpisize:
+                    self.logger.debug("Waiting for available process")
+                    comm.Recv(send_to_rank, source=MPI.ANY_SOURCE)
+                    current_rank -= 1
+                comm.send((keywords, directories), dest=send_to_rank[0])
+                current_rank[0] += 1
+                send_to_rank = current_rank
             else:
                 # no multiprocessing
                 self.run_talys(keywords, directories)
@@ -509,7 +532,6 @@ class Manager:
         # Wait for all of the talys_jobs to complete
         for talys_job in talys_jobs:
             talys_job.join()
-
 
     def run_talys(self, keywords, directories):
         """ Runs TALYS """
@@ -536,7 +558,7 @@ class Manager:
         info = "{mass}{element}-{name}".format(**keywords)
         self.counter.value += 1
         self.logger.info("(%s/%s) Execution time: %s by %s", self.counter.value,
-        self.counter_max, elapsed, info)
+                         self.counter_max, elapsed, info)
 
         # the filesize of output_file is an indicator of whether the execution
         # was successfull or not
@@ -567,34 +589,76 @@ class Manager:
             multiprocessing.current_process().pid))
         self.talys_queue.put(multiprocessing.current_process().pid)
 
+# For MPI
+class ChildRunner(Manager):
+    # Remove Manager's init
+    def __init__(self, rank):
+        self.rank = rank
+        class logger():
+            def info(self, *args):
+                print(args)
+            def debug(self, *args):
+                print(args)
+        class counter():
+            def __init__(self, value):
+                self.value = value
+
+        self.logger = logger
+        self.counter = counter(0)
+        self.counter_max = 23
+        self.options = comm.recv(source=0, tag=1)
+        self.wait_for_root()
+
+    def wait_for_root(self):
+        while True:
+            keywords, directories = comm.recv(source=0)
+            if "stop" in directories:
+                break
+            self.run_talys(keywords, directories)
+            comm.Send(np.array([self.rank]), dest=0)
+
 # Keep the script from running if imported as a module
 if __name__ == "__main__":
-    # Handle the arguments from terminal
-    args = get_args()
+    # Set up MPI. This must always be first
+    # The almighty communicator. Communicates messages between the nodes in a
+    # supercomputing cluster
+    comm = MPI.COMM_WORLD
+    # The rank is the current process' ID
+    rank = comm.Get_rank()
+    # Size is the number of processes
+    size = comm.Get_size()
 
-    # Set up  logging
-    try:  # Python 2.7+
-        from logging import NullHandler
-    except ImportError:
-        class NullHandler(logging.Handler):
-            def emit(self, record):
-                pass
+    # Only the root process, 0, shall create the directories
+    if rank == 0:
+        # Handle the arguments from terminal
+        args = get_args()
 
-    # Had a bug, this fixed it. It should't have, but it did. Leave it be
-    logging.basicConfig(level=logging.DEBUG, filename=args.lfilename,
-                        filemode="w", format="%(asctime)s - %(processName)-12s -  %(levelname)-8s - %(message)s")
-    logging.getLogger("__name__").addHandler(NullHandler())
+        # Set up  logging
+        try:  # Python 2.7+
+            from logging import NullHandler
+        except ImportError:
+            class NullHandler(logging.Handler):
+                def emit(self, record):
+                    pass
 
-    # Get the options
-    options = Json_reader(args.input_filename)
+        # Had a bug, this fixed it. It should't have, but it did. Leave it be
+        logging.basicConfig(level=logging.DEBUG, filename=args.lfilename,
+                            filemode="w", format="%(asctime)s - %(processName)-12s -  %(levelname)-8s - %(message)s")
+        logging.getLogger("__name__").addHandler(NullHandler())
 
-    # If --combinations, print the combinations and exit
-    if args.combinations:
-        print("Astro: {}\nElements: {}\nMasses: {}\nRest: {}\nTotal: {}".format(
-            *count_combinations(options)))
-        sys.exit()
+        # Get the options
+        options = Json_reader(args.input_filename)
 
-    # Create an instance of Manager to run the simulations
-    simulations = Manager(options=options, args=args)
-    simulations.run()
+        # If --combinations, print the combinations and exit
+        if args.combinations:
+            print("Astro: {}\nElements: {}\nMasses: {}\nRest: {}\nTotal: {}".format(
+                *count_combinations(options)))
+            sys.exit()
+
+        # Create an instance of Manager to run the simulations
+        simulations = Manager(options=options, args=args)
+        simulations.run()
+    else:
+        # The other processes run TALYS, but must wait for root
+        ChildRunner(rank)
 
