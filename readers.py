@@ -8,7 +8,12 @@ import json
 
 class Basic_reader(object):
     """ A basic reader to build upon """
-    def __init__(self, filename):
+    def __init__(self):
+        """ Make the variables
+            Parameters: None
+            Returns:    None
+            Algorithm   Simply set the variables
+        """
         # contains the keywords
         self.keywords = {}
         # contains those keywords that depend on another keyword
@@ -48,8 +53,14 @@ class Basic_reader(object):
 class Json_reader(Basic_reader):
     """ Parses input from json file """
     def __init__(self, filename):
+        """ Reads the json file and puts the result into the correct variables
+            Parameters: filename: the name of the json file
+            Returns:    None
+            Algorithm:  Call super's init, read the json file, put the
+                        variables into the correct containers
+        """
         # call the parent's __init__
-        super(Json_reader, self).__init__(filename)
+        super(Json_reader, self).__init__()
 
         # read the json file
         with open(filename) as rFile:
@@ -73,13 +84,19 @@ class Json_reader(Basic_reader):
             if key != "comment":
                 self.script_keywords[key] = self.convert(value)
 
-        self.structure = data["structure"]
+        #self.structure = data["structure"]
 
 class Python_reader(Basic_reader):
-    """ Parses input from python file """
+    """ Parses input from python file. NB: DOESN'T WORK """
     def __init__(self, filename):
+        """ Reads the python file and puts the result into the correct variables
+            Parameters: filename: the name of the python file
+            Returns:    None
+            Algorithm:  Call super's init, read the python file, put the
+                        variables into the correct containers
+        """
         # call parent's __init__
-        super(Python_reader, self).__init__(filename)
+        super(Python_reader, self).__init__()
 
         # read the python file
         options = __import__(filename)

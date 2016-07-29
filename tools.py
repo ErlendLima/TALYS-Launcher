@@ -4,6 +4,7 @@ The main purpose is to remove clutter in the main
 file
 """
 
+from __future__ import print_function
 import argparse
 import sys
 import os
@@ -12,23 +13,38 @@ import copy
 from string import Formatter
 
 
-class KeyFormatter(Formatter):
+class StyleFormatter(Formatter):
+    """ Custom formatter that handles nested field of two levels
+        such as '{mass[element]}'. Don't know how it works
+    """
     def get_value(self, field_name, args, kwargs):
+        # Return kwargs[field_name], else return ''
         return kwargs.get(field_name, '')
 
     def get_field(self, field_name, args, kwargs):
+        # To illustrate, the example '{mass[element]}' is used with
+        # the kwargs {"element":"Pr", "mass":{"Pr":128}}
+
+        # Split the field_name into the field and an iterator
+        # ex. mass <fieldnameiterator object at 0x105308840>
         first, rest = field_name._formatter_field_name_split()
+        #print("First:", first)
+        #print("Kwargs:", kwargs)
+        # obj = kwargs[field_name] or obj = '' if KeyError
+        # ex. obj = {"Pr":128}
         obj = self.get_value(first, args, kwargs)
 
-        print(first, rest)
-        print(obj)
-        for is_attr, i in rest:
-            print(is_attr, i)
-            if is_attr:
-                print(getattr(obj, i))
-                obj = getattr(obj, i)
-            else:
-                obj = obj.get(i, '')
+        # Often, "rest" is only one deep
+        # is_attr is a bool. I think it is true if something.keyword exists
+        # keyword is just a keyword, like something[keyword] or something.keyword
+        for is_attr, keyword in rest:
+            # This is the juciy stuff. If the keyword is in kwargs, return the
+            # value in obj
+            # ex. obj = {"Pr":128}["Pr"] = 128
+            if keyword in kwargs:
+                #print(obj)
+                obj = obj[kwargs.get(keyword)]
+        # ex. 128
         return obj, first
 
 
@@ -48,13 +64,21 @@ def correct(input_argument):
 
 
 def mkdir(directory):
-    """ Check if directory exists. If not, create it """
+    """ Check if directory exists. If not, create it
+    Parameters: directory: the name of the directory
+    Returns:    None
+    Algorithm:  Check if the direcctory exists, if not, create it
+    """
     if not os.path.exists(directory):
         os.makedirs(directory)
 
 
 def make_iterable(dictionary):
-    """ Makes every entry in the dictionary iterable and returns the result """
+    """ Makes every entry in the dictionary iterable and returns the result
+    Parameters: dictionary: the dict to be made iterable
+    Output:     The iterable dictionary
+    Algorithm:  Make every key in the list iterable and make the results
+                entries unique"""
     new_dict = copy.deepcopy(dictionary)
 
     for key in dictionary:
@@ -123,6 +147,9 @@ def get_args():
     parser.add_argument("-p", "--processes",
                         help="Set the number of processes the script will use. Should be less than or equal to number of CPU cores",
                         type=int, default=0)
+    parser.add_argument("--enable_pausing",
+                        help="Enable pausing by running a process that checks for input",
+                        action="store_true")
 
     args = parser.parse_args()
     # Convert the input strings to the corresponding logging type
@@ -156,3 +183,21 @@ class Cd:
         """ Returns to the original path when exiting the with-statement """
         os.chdir(self.savedPath)
 
+
+def getkey():
+    # Magic
+    import termios
+    TERMIOS = termios
+    fd = sys.stdin.fileno()
+    old = termios.tcgetattr(fd)
+    new = termios.tcgetattr(fd)
+    new[3] = new[3] & ~TERMIOS.ICANON & ~TERMIOS.ECHO
+    new[6][TERMIOS.VMIN] = 1
+    new[6][TERMIOS.VTIME] = 0
+    termios.tcsetattr(fd, TERMIOS.TCSANOW, new)
+    c = None
+    try:
+        c = os.read(fd, 1)
+    finally:
+        termios.tcsetattr(fd, TERMIOS.TCSAFLUSH, old)
+    return c
