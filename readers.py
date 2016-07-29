@@ -50,24 +50,26 @@ class Basic_reader(object):
             if key in c.keys():
                 return c[key]
 
+
 class Json_reader(Basic_reader):
     """ Parses input from json file """
     def __init__(self, filename):
         """ Reads the json file and puts the result into the correct variables
+
             Parameters: filename: the name of the json file
             Returns:    None
             Algorithm:  Call super's init, read the json file, put the
                         variables into the correct containers
         """
-        # call the parent's __init__
+        # Call the parent's __init__
         super(Json_reader, self).__init__()
 
-        # read the json file
+        # Read the json file
         with open(filename) as rFile:
             data = json.load(rFile)
 
         # fill self.keywords
-        for key, value in data["keywords"].iteritems():
+        for key, value in data["keywords"].items():
             if key != "comment":
                 self.keywords[key] = self.convert(value)
         self.keywords = make_iterable(self.keywords)
@@ -80,25 +82,28 @@ class Json_reader(Basic_reader):
 
 
         # fill self.script_keywords
-        for key, value in data["script_keywords"].iteritems():
+        for key, value in data["script_keywords"].items():
             if key != "comment":
                 self.script_keywords[key] = self.convert(value)
 
         #self.structure = data["structure"]
 
+
 class Python_reader(Basic_reader):
     """ Parses input from python file. NB: DOESN'T WORK """
     def __init__(self, filename):
-        """ Reads the python file and puts the result into the correct variables
+        """ Reads the python file and puts the result into the correct
+            variables
+        
             Parameters: filename: the name of the python file
             Returns:    None
             Algorithm:  Call super's init, read the python file, put the
                         variables into the correct containers
         """
-        # call parent's __init__
+        # Call parent's __init__
         super(Python_reader, self).__init__()
 
-        # read the python file
+        # Read the python file
         options = __import__(filename)
 
         for key, value in talys_options.__dict__.iteritems():
@@ -108,5 +113,51 @@ class Python_reader(Basic_reader):
                     # TALYS keywords
                     self.keywords[key] = value
                 else:
-                    # script keywords
+                    # Script keywords
                     self.script_keywords[key[2:]] = value
+
+
+class BRUSLIB_reader(Basic_reader):
+    """ Parses input for files in a BRUSLIB format """
+    def __init__(self, filename):
+        """ Reads the file and puts the result into the correct
+            variables
+
+            Parameters: filename: the name of the file
+            Returns:    None
+            Algorithm:
+        """
+        import re
+
+        # Call parent's __init__
+        super(BRUSLIB_reader, self).__init__()
+
+        elements = []
+        mass = {}
+        # Match 63eu96 103 or 26fe41, ect
+        pattern = re.compile("(\d{1,3})(\w\w?)(\d{1,3})\s?(\d{1,3})?")
+        # Match E1 2.5E-6 or E2 5673.23, etc
+        energy_pattern = re.compile("(E[1,2])\s+((?:0|[1-9]\d*)(?:\.\d*)?(?:[eE][+\-]?\d+))")
+        with open(filename, 'r') as rFile:
+            for line in rFile:
+                line = line.rstrip()
+                match = re.match(pattern, line)
+                energy_match = re.match(energy_pattern, line)
+                if not line:
+                    continue
+                elif match is not None:
+                    # Iterate over the range, if given
+                    start = int(match.group(3))
+                    end = int(match.group(4))+1 if match.group(4) is not None else start+1
+                    element = match.group(2)
+                    elements.append(element)
+                    mass[element] = []
+                    for neutrons in range(start, end):
+                        # mass = neutrons + protons
+                        mass[element].append(neutrons+int(match.group(1)))
+                elif energy_match is not None:
+                    self.keywords[energy_match.group(1)] = float(energy_match.group(2))
+                else:
+                    print("{} is of invalid format".format(line))
+        self.keywords["element"] = elements
+        self.keywords["mass"] = mass

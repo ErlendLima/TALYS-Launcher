@@ -5,7 +5,7 @@
         "energy": "energies.txt",
 
         "comment":"element",
-        "element":["Sm", "Pm", "Tb"],
+        "element":["Ce", "Pr", "Nd", "Pm", "Sm", "Eu", "Gd", "Tb", "Dy"],
 
         "comment":"projectile",
         "projectile":"n",

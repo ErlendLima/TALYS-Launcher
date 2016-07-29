@@ -86,7 +86,7 @@ def make_iterable(dictionary):
             new_dict[key] = [new_dict[key]]
 
     # check if every item in user given list is unique
-    for key, value in new_dict.iteritems():
+    for key, value in new_dict.items():
 
         try:
             # if variable tuple or list => new list with value only once
@@ -100,7 +100,7 @@ def make_iterable(dictionary):
         except TypeError:
             # if variable == dict => new dict with value only once inside
             # user_input[key]
-            for keys, values in value[0].iteritems():
+            for keys, values in value[0].items():
                 if len(set(values)) != len(values):
                     newlist = []
                     for val in values:
