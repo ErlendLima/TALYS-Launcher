@@ -14,12 +14,14 @@ class Basic_reader(object):
             Returns:    None
             Algorithm   Simply set the variables
         """
-        # contains the keywords
+        # Contains the keywords
         self.keywords = {}
-        # contains those keywords that depend on another keyword
+        # Contains those keywords that depend on another keyword
         self.conditionals = []
-        # contains the keywords related to the script
+        # Contains the keywords related to the script
         self.script_keywords = {}
+        #
+        self.nesteds = {}
 
     def __getitem__(self, index, s=False):
         """ Reader[index] first tries to return Reader.keywords[index]
@@ -86,6 +88,9 @@ class Json_reader(Basic_reader):
             if key != "comment":
                 self.script_keywords[key] = self.convert(value)
 
+        for key, value in data["nested"].items():
+            if key != "comment":
+                self.nesteds[key] = self.convert(value)
         #self.structure = data["structure"]
 
 
