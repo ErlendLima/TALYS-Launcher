@@ -123,33 +123,53 @@ def get_args():
     """
     parser = argparse.ArgumentParser()
     parser.add_argument("--debug",
-                        help="Show debugging information. Overrules log and verbosity",
+                        help="show debugging information. Overrules log and verbosity",
                         action="store_true")
     parser.add_argument("-l", "--log",
-                        help="Set the log level",
+                        help="set the log level",
                         choices=["DEBUG", "INFO",
                                  "WARNING", "ERROR", "CRITICAL"],
                         type=str.upper, default="INFO")
     parser.add_argument("-v", "--verbosity",
-                        help="Set the verbosity level",
+                        help="set the verbosity level",
                         choices=["DEBUG", "INFO",
                                  "WARNING", "ERROR", "CRITICAL"],
                         type=str.upper, default="INFO")
-    parser.add_argument("--lfilename",
-                        help="Filename of the log file",
-                        type=str, default="talys.log")
-    parser.add_argument("--efilename",
-                        help="Filename of the error file",
-                        type=str, default="error.log")
-    parser.add_argument("--input_filename",
-                        help="The filename for where the options are stored",
-                        type=str, default="structure.json")
+    parser.add_argument("--lfile",
+                        help="filename of the log file",
+                        type=str, default="talys.log",
+                        metavar='LOG_FILENAME',
+                        dest="log_filename")
+    parser.add_argument("--efile",
+                        help="filename of the error file",
+                        type=str, default="error.log",
+                        metavar='ERROR_FILENAME',
+                        dest="error_filename")
+    parser.add_argument("--ifile",
+                        help="the filename for where the options are stored",
+                        type=str, default="structure.json",
+                        metavar='INPUT_FILENAME',
+                        dest="input_filename")
     parser.add_argument("-p", "--processes",
-                        help="Set the number of processes the script will use. Should be less than or equal to number of CPU cores",
-                        type=int, default=0)
-    parser.add_argument("--enable_pausing",
-                        help="Enable pausing by running a process that checks for input",
-                        action="store_true")
+                        help=("set the number of processes the script will use. Should be less than or equal to number of CPU cores."
+                        "\nIf no N is specified, all available cores are used"),
+                        type=int, nargs="?",
+                        metavar='N', const=0)
+    parser.add_argument("--enable-pausing",
+                        help="enable pausing by running a process that checks for input",
+                        action="store_true",
+                        dest="enable_pausing")
+    parser.add_argument("--multi",
+                        help="The name of the level at which multiprocessing will be run. Do not use if any parameters vary!!",
+                        nargs='+', type=str, default=[])
+    parser.add_argument("--default-excepthook",
+                        help="use the default excepthook",
+                        action="store_true",
+                        dest="default_excepthook")
+    parser.add_argument("--disable-filters",
+                        help="do not filter log messages",
+                        action="store_true",
+                        dest="disable_filters")
 
     args = parser.parse_args()
     # Convert the input strings to the corresponding logging type

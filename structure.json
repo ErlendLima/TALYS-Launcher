@@ -13,35 +13,28 @@
     },
     "comment": "The keywords for the Python script",
     "conditionals": {
-        "comment": "The names, such as 'optical', are irrelevant"
+        "comment": "The names, such as 'optical', are irrelevant",
+        "Optical":{"localomp":"n", "jlmomp":"y"}
     },
     "keywords": {
         "outdensity": "y",
         "popeps": "1.00E-25",
         "astro": "y",
         "outgamma": "y",
-        "strength": [4],
+        "strength": [1,2,3,4,5,6,7,8],
         "gnorm": 1.0,
         "fileresidual": "y",
         "outlevels": "y",
         "comment": "projectile",
-        "ldmodel": [5],
+        "ldmodel": [1,2,3,4,5,6],
         "jlmomp": "y",
         "ejectiles": "n g",
         "projectile": "n",
         "element": [
-            "Ce",
-            "Pr",
-            "Nd",
-            "Pm",
-            "Sm",
-            "Eu",
-            "Gd",
-            "Tb",
-            "Dy"
+            "Ce"
         ],
         "preequilibrium": "y",
-        "massmodel": [2, 3],
+        "massmodel": [1,2,3],
         "mass": {
             "Dy": [
                 160,
@@ -592,7 +585,7 @@
         "transeps": "1.00E-15",
         "xseps": "1.00E-25"
     },
-    "nested": {
+    "renameme": {
         "Dy": {
             "160": {
                 "gpr": 1,

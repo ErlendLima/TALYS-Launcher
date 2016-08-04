@@ -73,25 +73,24 @@ class Json_reader(Basic_reader):
         # fill self.keywords
         for key, value in data["keywords"].items():
             if key != "comment":
-                self.keywords[key] = self.convert(value)
+                self.keywords[key] = value
         self.keywords = make_iterable(self.keywords)
-
 
         # fill self.conditionals
         for value in data["conditionals"].values():
             if isinstance(value, dict):
                 self.conditionals.append(value)
 
-
         # fill self.script_keywords
         for key, value in data["script_keywords"].items():
             if key != "comment":
                 self.script_keywords[key] = self.convert(value)
 
-        for key, value in data["nested"].items():
-            if key != "comment":
-                self.nesteds[key] = self.convert(value)
-        #self.structure = data["structure"]
+        if "nested" in data.keys():
+            for key, value in data["nested"].items():
+                if key != "comment":
+                    self.nesteds[key] = self.convert(value)
+            #self.structure = data["structure"]
 
 
 class Python_reader(Basic_reader):

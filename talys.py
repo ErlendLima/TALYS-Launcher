@@ -41,9 +41,9 @@ doing so, resulting in a doubling or quadrupling of TALYS' execution time. This
 major downside completey overweighs the upsides of using a computing cluster.
 
 This script is written in Python 2.7. If the readers wish to use Python 3,
-that is entirely possible, as only as few lines is necessary to be changes, the
-most numerous of which is dict.iteritems->dict.items()
+that is entirely possible, as only as few lines is necessary to be changes.
 
+TODO: Add failsafe for multiprocessing
 ##########################################
 Imports
 ##########################################
@@ -89,11 +89,84 @@ Functions
 ###########################################
 """
 
+
+def support_multiprocessing(check_list=False):
+    """ A decorator running functions with multiprocessing
+
+    Parameters: check_list: Boolean variable indicating if the given function
+                contains a keyword "name". If it does, the keyword "name"
+                will be compared with entires in args.multi_list. If
+                there is a match, multiprocessing will be used, if not
+                the function will be called as normal;
+    Returns:    Next level decorator.
+    Algorithm:  Create a standard decorator and return it
+    Note:       The target function must put the terminating child's PID
+                on self.queue.
+    """
+    def decorator(func):
+        def inner(*args, **kwargs):
+            """ Lowest level of the decorator
+            Parameters: args: The args to the function to be called
+                        kwargs: The kwargs to the function to be called
+            Algorithm:  If check_list is True, check if the keyword "name
+                        is in args.multi_list. If it is, use multiprocessing.
+                        If check_list is False, use multiprocessing.
+                        Check if the number of active children is under
+                        the limit set by --processes. If it is, increment
+                        the running_children counter. This is done first to
+                        make it less likely that the number of processes
+                        exeeds the limit. Run the function and store the
+                        PID in a multiprocessing.Manager
+                        If the limit is reached, wait at the
+                        multiprocessing.Queue for a PID. This PID is then
+                        removed from the list over running children and the
+                        counter is decremented":"""
+            if check_list:
+                if kwargs["name"] in args[0].multi_list:
+                    do_run = True
+                else:
+                    do_run = False
+            else:
+                do_run = True
+            if args[0].use_multiprocessing and do_run:
+                # Only pause if the limit set by --processes is reached
+                if args[0].running_children.value >= args[0].args.processes:
+                    args[0].logger.debug("Waiting for available process")
+                    pid = args[0].queue.get()
+                    # Wait a second to let the process be terminated
+                    time.sleep(1)
+                    for process in args[0].mps_list:
+                        if process == pid:
+                            # If it did not terminate, wait till it does
+                            #process.join()
+                            args[0].logger.debug("Removing %s from list", pid)
+                            # Finally, remove it
+                            args[0].mps_list.remove(process)
+                            args[0].running_children.value -= 1
+                            break
+                    if args[0].running_children.value >= args[0].args.processes:
+                        args[0].logger.exception("PID not on list")
+                        raise Exception
+                args[0].running_children.value += 1
+                job = multiprocessing.Process(
+                    target=func,
+                    args=args, kwargs=kwargs)
+                # Keep a reference to shut them down
+                # Start it
+                job.start()
+                args[0].mps_list.append(job.pid)
+            else:
+                func(*args, **kwargs)
+    
+        return inner
+    return decorator
+
 """
-##########################################
+###########################################
 Classes
-##########################################
+###########################################
 """
+
 
 class Manager:
     """ Creates the directories, manages logging and runs talys """
@@ -108,14 +181,41 @@ class Manager:
                     the default excepthook and send options to any MPI children
         """
         self.reader = options  # Arguments read from file
-        self.args = args        # Arguments read from terminal
+        self.args = args       # Arguments read from terminal
+
+        # Check the size given by MPI.COMM to determine if the
+        # script is being run by MPI
         self.use_MPI = size > 1
+        # Set a multiprocessing flag if running several processes
+        if args.processes == 0:
+            try:
+                self.args.processes = multiprocessing.cpu_count()
+            except NotImplementedError:
+                sys.exit("Could not find cpu count. Specify -p N") 
         self.use_multiprocessing = self.args.processes > 0
+        # Multiprocessing and MPI may not be used in conjunction
         if self.use_MPI and self.use_multiprocessing:
             print("Multiprocessing can not be used with MPI")
             comm.Abort()
+        # The number of MPI nodes
         self.mpisize = size
+        # Counter to store the total number of TALYS-executions
         self.counter_max = 0
+        # Keeps the queues for multiprocessing
+        self.queue = multiprocessing.Queue()
+        # Counter showing how many child processing are running around
+        self.running_children = multiprocessing.Value('i', 0)
+        # List containing references to all running children
+        self.mps_list = multiprocessing.Manager().list()
+        # Names for where multiprocessing will be run
+        self.multi_list = args.multi
+        # Shared memory resource for keeping track of how many
+        # TALYS-executions has been done
+        self.counter = multiprocessing.Value('i', 0)
+        # Keeps track of the number of running MPI ranks
+        self.used_ranks = 1
+        # The current MPI rank to send to
+        self.send_to_rank = 1
 
         # Create the root directory named by the current date and time
         self.root_directory = 'TALYS-calculations-{}-{}'.format(
@@ -126,10 +226,12 @@ class Manager:
         self.init_logger()
 
         # sys.excepthook is what deals with an unhandled exception
-        sys.excepthook = self.excepthook
+        if not self.args.default_excepthook:
+            sys.excepthook = self.excepthook
 
         # send the input options to the mpichildren
         for n in range(1, self.mpisize):
+            self.logger.debug("Sending reader to %s", n)
             comm.send(self.reader, dest=n, tag=1)
 
     def __enter__(self):
@@ -175,7 +277,7 @@ class Manager:
         """
 
         # Use a multiprocessing-safe logger if --processes is set
-        if self.args.processes > 0:
+        if self.use_multiprocessing > 0:
             self.logger = multiprocessing.get_logger()
         else:
             self.logger = logging.getLogger()
@@ -190,17 +292,18 @@ class Manager:
             def filter(self, record):
                 return not "mmap" in record.getMessage()
 
-        self.logger.addFilter(NoMultiProcessingFilter())
-        self.logger.addFilter(NoMmapFilter())
+        if not self.args.disable_filters:
+            self.logger.addFilter(NoMultiProcessingFilter())
+            self.logger.addFilter(NoMmapFilter())
 
         # File Handler - writes log messages to log file
         log_handle = logging.FileHandler(
-            os.path.join(self.root_directory, self.args.lfilename))
+            os.path.join(self.root_directory, self.args.log_filename))
         log_handle.setLevel(self.args.log)
 
         # File Handler - writes error messages to error file
         error_handle = logging.FileHandler(
-            os.path.join(self.root_directory, self.args.efilename))
+            os.path.join(self.root_directory, self.args.error_filename))
         error_handle.setLevel(logging.ERROR)
 
         # Console handler - writes log messages to the console
@@ -296,7 +399,7 @@ class Manager:
         outfile.write('\n\nVariable input:')
 
         # Write the rest of the keywords
-        for value, key in input.keywords.iteritems():
+        for value, key in input.keywords.items():
             if len(key) == 1:
                 key = key[0]
             elif isinstance(key, (list)):
@@ -309,20 +412,24 @@ class Manager:
 
         outfile.write('\n\nEnergies: \n')
 
-        # Create energy input
-        energies = np.linspace(float(self.reader['E1']),
-                               float(self.reader['E2']),
-                               float(self.reader['N']))
-        # Outfile named energy_file
-        outfile_energy = open(os.path.join(self.root_directory, self.reader['energy'][0]), 'w')
-        # Write energies to energy_file and file in one column
-        for Ei in energies:
-            # Write energies to file in column
-            outfile_energy.write('%.2E \n' % Ei)
-            # Write energies to  file in one column
-            outfile.write('%.2E \n' % Ei)
+        if "n" in input["astro"] or "no" in input["astro"]:
+            self.astro_yes = False
+            # Create energy input
+            energies = np.linspace(float(self.reader['E1']),
+                                   float(self.reader['E2']),
+                                   float(self.reader['N']))
+            # Outfile named energy_file
+            outfile_energy = open(os.path.join(self.root_directory, self.reader['energy'][0]), 'w')
+            # Write energies to energy_file and file in one column
+            for Ei in energies:
+                # Write energies to file in column
+                outfile_energy.write('%.2E \n' % Ei)
+                # Write energies to  file in one column
+                outfile.write('%.2E \n' % Ei)
+            outfile_energy.close()
+        else:
+            self.astro_yes = True    
 
-        outfile_energy.close()
         outfile.close()
 
     def make_input_file(self, keywords, directories):
@@ -358,20 +465,24 @@ class Manager:
         outfile_input.write('element {} \n'.format(element))
         outfile_input.write('projectile {} \n'.format(projectile))
         outfile_input.write('mass {} \n'.format(mass))
-        outfile_input.write('energy {} \n \n'.format(energy))
+        if not self.astro_yes:
+            outfile_input.write('energy {} \n \n'.format(energy))
+        else:
+            outfile_input.write('energy 1\n')
 
         # Write the keyword and corresponding value
-        for key, value in keywords.iteritems():
+        for key, value in keywords.items():
             outfile_input.write('{} {} \n'.format(key, str(value)))
 
         # Bad things happen if the file isn't closed
         outfile_input.close()
 
-        # Copy energy file  to isotope directory
-        src_energy_new = os.path.join(
-            self.root_directory, energy)
-        dst_energy_input = directories["rest_directory"]
-        shutil.copy(src_energy_new, dst_energy_input)
+        if not self.astro_yes:
+            # Copy energy file  to isotope directory
+            src_energy_new = os.path.join(
+                self.root_directory, energy)
+            dst_energy_input = directories["rest_directory"]
+            shutil.copy(src_energy_new, dst_energy_input)
 
     def run(self):
         """ Simple wrapper for self._run()
@@ -478,7 +589,7 @@ class Manager:
         fmt = StyleFormatter()
 
         # Iterate through the list consiting of [{name:style}, {name:style} ...]
-        for name, style in structure[0].iteritems():
+        for name, style in structure[0].items():
             # The for loop is needed to keep the iteration going, but in
             # reality it is only iterating through 1 element. Instead
             # the list is shrunk by deleting the newly used element
@@ -508,18 +619,38 @@ class Manager:
                     #     keyword = "Pm"
                     #     new_keywords["element"] = "Pm"
                     new_keywords[name] = keyword
-                    # Create the directories with names according to the style
-                    directories["current_orig"] = os.path.join(
-                        current_orig, fmt.format(style, **new_keywords))
-                    directories["current_res"] = os.path.join(
-                        current_res, fmt.format(style, **new_keywords))
-                    mkdir(directories["current_orig"])
-                    mkdir(directories["current_res"])
-                    # This is an ugly piece of code. Since the "mass" keyword
-                    # is dependent on the current element, the current element
-                    # must be stored for this function to work
-                    new_keywords["prev_keyword"] = keyword
-                    self.run_deeper(new_keywords, directories, structure)
+                    self.run_deeper_useless_function(keywords=new_keywords,
+                                                     directories=directories,
+                                                     keyword=keyword,
+                                                     current_orig=current_orig,
+                                                     current_res=current_res,
+                                                     name=name,
+                                                     style=style,
+                                                     structure=structure)
+
+    @support_multiprocessing(check_list=True)
+    def run_deeper_useless_function(self, keywords, directories, keyword,
+                                    current_orig, current_res, name,
+                                    style, structure):
+        """ Split from run_deeper to support multiprocessing """
+        fmt = StyleFormatter()
+        # Create the directories with names according to the style
+        directories["current_orig"] = os.path.join(
+            current_orig, fmt.format(style, **keywords))
+        directories["current_res"] = os.path.join(
+            current_res, fmt.format(style, **keywords))
+        mkdir(directories["current_orig"])
+        mkdir(directories["current_res"])
+        # This is an ugly piece of code. Since the "mass" keyword
+        # is dependent on the current element, the current element
+        # must be stored for this function to work
+        keywords["prev_keyword"] = keyword
+        self.run_deeper(keywords, directories, structure)
+        if self.use_multiprocessing and False:
+            self.logger.debug("%s is terminating",
+                              multiprocessing.current_process().pid)
+            self.queue.put(multiprocessing.current_process().pid)
+
 
     def run_rest(self, keywords, directories):
         """ Creates the name of the final directory and calls self.run_talys()
@@ -568,8 +699,9 @@ class Manager:
             values.append(condition.keys())
 
         # Deal with epr, gpr, spr
-        for key, value in self.reader.nesteds[keywords["element"]][str(keywords["mass"])].items():
-            talys_keywords[key] = "{} {} {} M1".format(int(Z_nr[keywords["element"]]),
+        if len(self.reader.nesteds.keys()) > 0:
+            for key, value in self.reader.nesteds[keywords["element"]][str(keywords["mass"])].items():
+                talys_keywords[key] = "{} {} {} M1".format(int(Z_nr[keywords["element"]]),
                                                        int(keywords["mass"])+1,
                                                        value)
 
@@ -583,11 +715,8 @@ class Manager:
         # must do, so the counter_max is set only once - during the first run
         if self.counter_max == 0:
             self.count(values)
-            self.counter = multiprocessing.Value('i', 0)
         # current_rank keeps track of how many available ranks there are
         # send_to_rank stores the rank to which information will be sent
-        current_rank = 1
-        send_to_rank = 1
         for value in product(*values):
             # If --enable_pausing is set, check if execution shall pause
             if self.args.enable_pausing:
@@ -617,8 +746,9 @@ class Manager:
                 talys_keywords[key] = value
 
             keywords["name"] = name
+
             # Make all values to non-lists
-            for key, val in talys_keywords.iteritems():
+            for key, val in talys_keywords.items():
                 if isinstance(val, (list, tuple)):
                     talys_keywords[key] = val[0]
 
@@ -629,7 +759,7 @@ class Manager:
                 mkdir(directories["rest_directory"])
             else:
                 # If nothing varies, name the directories by a counter
-                directories["rest_directory"] = directories["current_directory"]
+                directories["rest_directory"] = directories["current_orig"]
 
             # Make input file
             try:
@@ -640,60 +770,26 @@ class Manager:
                 continue
 
             # Run TALYS
-            # Use multiprocessing on each run of talys
-            # If --processes is not set, jump over this
-            if self.use_multiprocessing:
-                # Only pause if the limit set by --processes is reached
-                if len(talys_jobs) >= self.args.processes:
-                    """
-                    Use the set number of processes. Wait for available
-                    Gets blocked until something is put on the queue, i.e.
-                    one of the subprocesses has finished
-                    """
-                    self.logger.debug("Waiting for available process")
-                    # (pid = process identification)
-                    pid = self.talys_queue.get()
-
-                    # to prevent any fuckups, wait for the process to
-                    # finished if, by any chance, it hasn't.
-                    # it looks like this happens once in a while
-                    time.sleep(1)
-                    for process in talys_jobs:
-                        if process.pid == pid:
-                            if process.is_alive():
-                                self.logger.warn("%s was not terminated", pid)
-                                process.join()
-                                # remove it from the list and put a new on
-                            self.logger.debug("Removing %s from list", pid)
-                            talys_jobs.remove(process)
-                            break
-
-                # set up the subprocess
-                talys_job = multiprocessing.Process(
-                    target=self.run_talys, args=(keywords, directories, ))
-                # keep a reference so it can be shut down
-                talys_jobs.append(talys_job)
-                # and let it loose into the wild!
-                talys_job.start()
-            elif self.use_MPI:
-                if current_rank >= self.mpisize:
+            if self.use_MPI:
+                if self.used_ranks >= self.mpisize:
                     self.logger.debug("Waiting for available rank")
                     try:
-                        send_to_rank = comm.recv(source=MPI.ANY_SOURCE)
+                        self.send_to_rank = comm.recv(source=MPI.ANY_SOURCE)
                     finally:
-                        self.logger.debug("Sending to %s", send_to_rank)
-                    current_rank -= 1
-                comm.send((keywords, directories), dest=send_to_rank)
-                current_rank += 1
-                send_to_rank = current_rank
+                        self.logger.debug("Sending to %s", self.send_to_rank)
+                    self.used_ranks -= 1
+                comm.send((keywords, directories), dest=self.send_to_rank)
+                self.used_ranks += 1
+                self.send_to_rank = self.used_ranks
             else:
-                # no multiprocessing
-                self.run_talys(keywords, directories)
+                # No kind of multiprocessing
+                self.run_talys(keywords=keywords, directories=directories)
 
         # Wait for all of the talys_jobs to complete
         for talys_job in talys_jobs:
             talys_job.join()
 
+    @support_multiprocessing()
     def run_talys(self, keywords, directories):
         """ Runs TALYS
 
@@ -706,10 +802,6 @@ class Manager:
         # Deepcopy the directories list to prevent multiprocessing mixup
         directories = copy.deepcopy(directories)
         directories["current_orig"] = directories["rest_directory"]
-
-        # Move the talys executable if on a cluster
-        if self.use_MPI:
-            shutil.copy("talys", directories["current_orig"])
 
         # Actually run TALYS and time its execution
         start = time.time()
@@ -726,7 +818,6 @@ class Manager:
                 stderr=subprocess.STDOUT,
                 # Don't know
                 close_fds=True)
-
         # Get STDOUT and STDERR and see if they are non-empty
         # (Both are sent to STDOUT)
         stdout, _ = process.communicate()
@@ -735,23 +826,19 @@ class Manager:
             return
 
         elapsed = time.strftime("%M:%S", time.localtime(time.time() - start))
-        info = "{mass}{element}-{name}".format(**keywords)
-        if not self.use_MPI:
-            self.counter.value += 1
-            self.logger.info("(%s/%s) Execution time: %s by %s", self.counter.value,
-                             self.counter_max, elapsed, info)
-        else:
-            # When running MPI, the scripts has no knowlegde of neither the
-            # logger nor the counters
-            print("Execution time: {} by {}".format(elapsed, info))
+        info = "{mass}{element}-{name}".format(**keywords) if keywords["name"] else "{mass}{element}".format(**keywords)
+        self.counter.value += 1
+        self.logger.info("(%s/%s) Execution time: %s by %s", self.counter.value,
+                         self.counter_max, elapsed, info)
 
         # Move result file to
         # TALYS-calculations-date-time/result_files/element/isotope
         try:
             for filename in self.reader["result_files"]:
+                name = "{}-{}".format(keywords["name"], filename) if keywords["name"] else filename
                 shutil.copy(os.path.join(directories["current_orig"], filename),
                             os.path.join(directories["current_res"],
-                                         "{}-{}".format(keywords["name"], filename)))
+                                         name))
         except Exception as exc:
             # Give TALYS some time to write the output.txt
             time.sleep(1)
@@ -769,10 +856,9 @@ class Manager:
 
         # Tell the parent process that the child has finnished
         # The purpose of this is to let the next process begin
-        if not self.use_MPI:
-            self.logger.debug("{} is terminating".format(
-                multiprocessing.current_process().pid))
-            self.talys_queue.put(multiprocessing.current_process().pid)
+        self.logger.debug("%s is terminating",
+                          multiprocessing.current_process().pid)
+        self.queue.put(multiprocessing.current_process().pid)
 
 
 # For MPI
@@ -801,6 +887,42 @@ class ChildRunner(Manager):
             except Exception as e:
                 print("An error occured: ", e)
 
+    def run_talys(self, keywords, directories):
+        """ Runs TALYS
+
+        Parameters: keywords: the input options
+                    directories: a dictionary over the names of the directories
+        Algorithm:  call system.fork() to run TALYS, and redirect the system
+                    signals and standard outputs to this python script. Log
+                    any errors and execution time
+        """
+        directories["current_orig"] = directories["rest_directory"]
+
+        shutil.copy("talys", directories["current_orig"])
+
+        # Actually run TALYS and time its execution
+        start = time.time()
+        with Cd(directories["current_orig"]):
+            os.system("./talys <{}> {}".format(
+                self.reader["input_file"],
+                self.reader["output_file"]))
+            os.remove("talys")
+
+        elapsed = time.strftime("%M:%S", time.localtime(time.time() - start))
+        info = "{mass}{element}-{name}".format(**keywords) if keywords["name"] else "{mass}{element}".format(**keywords)
+        # When running MPI, the scripts has no knowlegde of neither the
+        # logger nor the counters
+        print("Execution time: {} by {}".format(elapsed, info))
+        # Move result file to
+        # TALYS-calculations-date-time/result_files/element/isotope
+        try:
+            for filename in self.reader["result_files"]:
+                name = "{}-{}".format(keywords["name"], filename) if keywords["name"] else filename
+                shutil.copy(os.path.join(directories["current_orig"], filename),
+                            os.path.join(directories["current_res"],
+                                         name))
+        except Exception as exc:
+            print("Error: ", exc)
 
 # Keep the script from running if imported as a module
 if __name__ == "__main__":
@@ -833,15 +955,16 @@ if __name__ == "__main__":
 
         # Had a bug, this fixed it. It should't have, but it did. Leave it be
         if args.debug:
-            logging.basicConfig(level=logging.DEBUG, filename=args.lfilename,
+            logging.basicConfig(level=logging.DEBUG, filename=args.log_filename,
                                 filemode="w", format="%(asctime)s - %(processName)-12s -  %(levelname)-8s - %(message)s")
         else:
-            logging.basicConfig(level=logging.DEBUG, filename=args.lfilename,
+            logging.basicConfig(level=logging.DEBUG, filename=args.log_filename,
                                 filemode="w", format="%(asctime)s - %(levelname)-8s - %(message)s")
         logging.getLogger("__name__").addHandler(NullHandler())
 
         # Get the options
         options = Json_reader(args.input_filename)
+        print("Loaded ", args.input_filename)
 
         # Create an instance of Manager to run the simulations
         with Manager(options=options, args=args) as simulations:
