@@ -1,14 +1,12 @@
 #! /usr/bin/python
 """
-Last updated 28th of July 2016
+Last updated 5th of August 2016
 This script is written to greatly simplify using TALYS. The main features are
-- Assign ranges for the TALYS-nkeywords
+- Assign ranges for the TALYS keywords
 - Create a clean and customisable directory structure
 - Utilise multiprocessing for running several instances of TALYS
   on multiple cores
 - Use MPI on a large scale parallel-computing network, such as Abel on UiO
-  Note: This has a severe time penalty, rendering this feature useless unless
-  the problem is resolved. See later on the use of MPI.
 
 The script is split into logical parts:
 - The file readers.py contains a few
@@ -24,26 +22,20 @@ The script is split into logical parts:
   while the final functions set up in TALYS input files and multiprocessing.
 
 Use of MPI
-The module mpi4py is used to take advantage of cluster computing. The
-Python-portion of this should be working, but there are several problems with
-this implementation. Currently, this script calls the underlying kernel
-function system.fork() to run TALYS, but this is strongly discouraged when
-running MPI-programs. However, on earlier runs, this worked fine. An
-alternative is to use MPI.COMM_SELF.Spawn(command, args=args), but this has a
-tendency to hang. Presumably, the reason for this is that since TALYS is a
-non-MPI program, it does not give any hooks to ortrun, resulting in ortrun
-waiting forever before moving on. A possible fix is to set ormpi_non_mpi=true,
-but it doesn't look like mpi4py understands this.
-
-If these problems are overcome, the final obstacle is TALYS itself. When being
-loaded into the memory of a Node, it seems like there is a large overhead when
-doing so, resulting in a doubling or quadrupling of TALYS' execution time. This
-major downside completey overweighs the upsides of using a computing cluster.
+MPI is supported, but some remarks about caution must be made. Since fork() is
+called, the implementation of MPI used might not put all of the child processes
+on different cores, resulting in a catastrophic increase in computing time.
+The increase can be anything from 2x to 60x. To prevent this from happening,
+use --nooversubscribe and supply mpirun with fewer ranks than what SLURM is
+assigning. An example would be
+#SBATCH --ntasks 64
+mpirun -nooversubscribe -np 50 python talys.py
 
 This script is written in Python 2.7. If the readers wish to use Python 3,
-that is entirely possible, as only as few lines is necessary to be changes.
+that is entirely possible, as only as few lines is necessary to be changed.
 
 TODO: Add failsafe for multiprocessing
+TODO: Check alternatives for os.system on MPI
 ##########################################
 Imports
 ##########################################
@@ -774,7 +766,11 @@ class Manager:
                 if self.used_ranks >= self.mpisize:
                     self.logger.debug("Waiting for available rank")
                     try:
-                        self.send_to_rank = comm.recv(source=MPI.ANY_SOURCE)
+                        self.send_to_rank, execution_time = comm.recv(source=MPI.ANY_SOURCE)
+                        self.logger.info('(%s/%s) %s',self.counter.value,
+                                         self.counter_max,
+                                         execution_time)
+                        self.counter.value += 1
                     finally:
                         self.logger.debug("Sending to %s", self.send_to_rank)
                     self.used_ranks -= 1
@@ -784,10 +780,6 @@ class Manager:
             else:
                 # No kind of multiprocessing
                 self.run_talys(keywords=keywords, directories=directories)
-
-        # Wait for all of the talys_jobs to complete
-        for talys_job in talys_jobs:
-            talys_job.join()
 
     @support_multiprocessing()
     def run_talys(self, keywords, directories):
@@ -883,7 +875,7 @@ class ChildRunner(Manager):
                 if "stop" in directories:
                     break
                 self.run_talys(keywords, directories)
-                comm.send(self.rank, dest=0)
+                comm.send((self.rank, self.execution_time), dest=0)
             except Exception as e:
                 print("An error occured: ", e)
 
@@ -912,7 +904,7 @@ class ChildRunner(Manager):
         info = "{mass}{element}-{name}".format(**keywords) if keywords["name"] else "{mass}{element}".format(**keywords)
         # When running MPI, the scripts has no knowlegde of neither the
         # logger nor the counters
-        print("Execution time: {} by {}".format(elapsed, info))
+        self.execution_time = "Execution time: {} by {}".format(elapsed, info)
         # Move result file to
         # TALYS-calculations-date-time/result_files/element/isotope
         try:
