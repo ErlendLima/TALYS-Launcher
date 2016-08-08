@@ -25,16 +25,14 @@
         "gnorm": 1.0,
         "fileresidual": "y",
         "outlevels": "y",
-        "comment": "projectile",
         "ldmodel": [1,2,3,4,5,6],
-        "jlmomp": "y",
         "ejectiles": "n g",
         "projectile": "n",
         "element": [
             "Ce"
         ],
         "preequilibrium": "y",
-        "massmodel": [1,2,3],
+        "massmodel": [0,1,2,3],
         "mass": {
             "Dy": [
                 160,

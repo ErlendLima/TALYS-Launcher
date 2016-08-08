@@ -234,7 +234,7 @@ class Manager:
         """ Shut down the children when exiting """
         for rank in range(1, self.mpisize):
             print("Sending stop to", rank)
-            comm.send(("stop", "stop"), dest=rank)
+            comm.send(("stop",)*5, dest=rank)
 
     def count(self, values):
         """ Find the total number of TALYS runs
@@ -766,15 +766,22 @@ class Manager:
                 if self.used_ranks >= self.mpisize:
                     self.logger.debug("Waiting for available rank")
                     try:
-                        self.send_to_rank, execution_time = comm.recv(source=MPI.ANY_SOURCE)
+                        self.send_to_rank, execution_time, errors = comm.recv(source=MPI.ANY_SOURCE)
                         self.logger.info('(%s/%s) %s',self.counter.value,
                                          self.counter_max,
                                          execution_time)
+                        for error in errors:
+                            self.logger.error(error)
                         self.counter.value += 1
                     finally:
                         self.logger.debug("Sending to %s", self.send_to_rank)
                     self.used_ranks -= 1
-                comm.send((keywords, directories), dest=self.send_to_rank)
+                comm.send((directories["rest_directory"],
+                           directories["current_res"],
+                           keywords["mass"],
+                           keywords["element"],
+                           keywords["name"]),
+                          dest=self.send_to_rank)
                 self.used_ranks += 1
                 self.send_to_rank = self.used_ranks
             else:
@@ -861,6 +868,7 @@ class ChildRunner(Manager):
         self.use_MPI = True
         self.reader = comm.recv(source=0, tag=1)
         self.wait_for_root()
+        self.directory = ''
 
     def wait_for_root(self):
         """ Waits for commands from the script running as rank 0
@@ -871,15 +879,68 @@ class ChildRunner(Manager):
         """
         while True:
             try:
-                keywords, directories = comm.recv(source=0)
-                if "stop" in directories:
+                work_directory, result_directory, mass, element, name = comm.recv(source=0)
+                if "stop" in name:
                     break
-                self.run_talys(keywords, directories)
-                comm.send((self.rank, self.execution_time), dest=0)
+                self.errors = []
+                self.run_talys(work_directory, result_directory,
+                               mass, element, name)
+                comm.send((self.rank, self.execution_time, self.errors), dest=0)
             except Exception as e:
                 print("An error occured: ", e)
 
-    def run_talys(self, keywords, directories):
+    def run_talys(self, work_directory, result_directory, mass, element, name):
+        shutil.copy("talys", work_directory)
+        start = time.time()
+        with Cd(work_directory):
+            process = subprocess.Popen('./talys <{}> {}'.format(
+                self.reader["input_file"],
+                self.reader["output_file"]),
+                                       # Do not send signals to the subprocess
+                preexec_fn=os.setpgrp,
+                                       # Spawn a shell
+                shell=True,
+                                       # Send both stdout and stderr to pipe.stdout
+                stdout=subprocess.PIPE,
+                                       stderr=subprocess.STDOUT,
+                                       # Don't know
+                close_fds=True)
+        # Get STDOUT and STDERR and see if they are non-empty
+        # (Both are sent to STDOUT)
+        stdout, _ = process.communicate()
+        os.remove(os.path.join(work_directory, "talys"))
+        if stdout:
+            self.errors.append("TALYS could not be run: ".format(stdout.rstrip()))
+            return 
+
+        elapsed = time.strftime("%M:%S", time.localtime(time.time() - start))
+        info = "{}{}-{}".format(mass, element, name) if name else "{}{}".format(mass, element)
+        self.execution_time = "Execution time: {} by {}".format(elapsed, info)
+
+        # Move result file to
+        # TALYS-calculations-date-time/result_files/element/isotope
+        try:
+            for filename in self.reader["result_files"]:
+                fname = "{}-{}".format(name, filename) if name else filename
+                shutil.copy(os.path.join(work_directory, filename),
+                            os.path.join(result_directory,
+                                         fname))
+        except Exception as exc:
+            # Give TALYS some time to write the output.txt
+            time.sleep(1)
+
+            self.errors.append(exc)
+            # The filesize of output_file is an indicator of whether the
+            # execution was successful or not
+            path = os.path.join(work_directory,
+                                self.reader["output_file"])
+            if os.path.getsize(path) < 600:
+                # execution failed. Open the file and log the output
+                with open(path, "r") as output_file:
+                    msg = ''.join(output_file.readlines()).rstrip()
+                    self.errors.append(msg[1:])
+
+    def _run_talys(self, keywords, directories):
         """ Runs TALYS
 
         Parameters: keywords: the input options
