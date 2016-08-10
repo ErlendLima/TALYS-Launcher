@@ -1,20 +1,25 @@
 # Write this file in Python-syntax
+# Prefix the script keywords with s_
 
+###################
+# Script keywords #
+###################
 #Energies
-energy_file = 'energies.txt'
+s_energy_file = 'energies.txt'
 
-E1 = 0.0025E-03
-E2 = 5000E-03
-step = 100
+s_E1 = 0.0025E-03
+s_E2 = 5000E-03
+s_step = 100
 
 # name of input file:
-input_file = 'input.txt'
+s_input_file = 'input.txt'
 
 #name of output file:
-output_file = 'output.txt'
+s_output_file = 'output.txt'
 
-#name of energy file:
-energy_file = 'energies.txt'
+##################
+# TALYS keywords #
+##################
 
 #element
 element = 'Ce', 'Pr'
@@ -27,8 +32,8 @@ mass = {'Ce': [156, 160, 158, 160, 162, 163, 164],
         'Pr':[158, 163, 160]}
 #mass = 86, 87, 88, 110, 300, 241
 
-massmodel = 3
-#massmodel = 1, 2, 3
+#massmodel = 3
+massmodel = 1, 2, 3
 
 ldmodel = 3, 3
 #ldmodel = 2, 3, 1
@@ -51,7 +56,7 @@ optical = 'localomp n', 'jlmomp y'
 
 
 #astro = 'y'
-astro = 'n'
+astro = 'y'
 
 #epr = 50
 #gpr = 34
