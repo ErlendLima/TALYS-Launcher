@@ -34,11 +34,9 @@ mpirun -nooversubscribe -np 50 python talys.py
 This script is written in Python 2.7. If the readers wish to use Python 3,
 that is entirely possible, as only as few lines is necessary to be changed.
 
-TODO: Add failsafe for multiprocessing
-TODO: Add checkpointing
-TODO: Avoid copying talys by using paths for input and output
+TODO: Add failsafe for multiprocessing. Very technically challengig
 TODO: Rewrite formatter and make the code Python3 friendly
-TODO: Find talys version
+TODO: Find talys version. Not technically possible without reverse engineering
 ##########################################
 Imports
 ##########################################
@@ -65,18 +63,30 @@ from readers import *                    # The input readers
 Global Variables
 ##########################################
 """
-Z_nr = {'H': '001',  'He': '002', 'Li': '003',  'Be': '004', 'B': '005',   'C': '006',  'N': '007',   'O': '008',  'F': '009',  'Ne': '010',
-        'Na': '011', 'Mg': '012', 'Al': '013',  'Si': '014', 'P': '015',   'S': '016',  'Cl': '017',  'Ar': '018', 'K': '019',  'Ca': '020',
-        'Sc': '021', 'Ti': '022', 'V': '023',   'Cr': '024', 'Mn': '025',  'Fe': '026', 'Co': '027',  'Ni': '028', 'Cu': '029', 'Zn': '030',
-        'Ga': '031', 'Ge': '032', 'As': '033',  'Se': '034', 'Br': '035',  'Kr': '036', 'Rb': '037',  'Sr': '038', 'Y': '039',  'Zr': '040',
-        'Nb': '041', 'Mo': '042', 'Tc': '043',  'Ru': '044', 'Rh': '045',  'Pd': '046', 'Ag': '047',  'Cd': '048', 'In': '049', 'Sn': '050',
-        'Sb': '051', 'Te': '052', 'I': '053',   'Xe': '054', 'Cs': '055',  'Ba': '056', 'La': '057',  'Ce': '058', 'Pr': '059', 'Nd': '060',
-        'Pm': '061', 'Sm': '062', 'Eu': '063',  'Gd': '064', 'Tb': '065',  'Dy': '066', 'Ho': '067',  'Er': '068', 'Tm': '069', 'Yb': '070',
-        'Lu': '071', 'Hf': '072', 'Ta': '073',  'W': '074',  'Re': '075',  'Os': '076', 'Ir': '077',  'Pt': '078', 'Au': '079', 'Hg': '080',
-        'Tl': '081', 'Pb': '082', 'Bi': '083',  'Po': '084', 'At': '085',  'Rn': '086', 'Fr': '087',  'Ra': '088', 'Ac': '089', 'Th': '090',
-        'Pa': '091', 'U': '092',  'Np': '093',  'Pu': '094', 'Am': '095',  'Cm': '096', 'Bk': '097',  'Cf': '098', 'Es': '099', 'Fm': '100',
-        'Md': '101', 'No': '102', 'Lr': '103',  'Rf': '104', 'Db': '105',  'Sg': '106', 'Bh': '107',  'Hs': '108', 'Mt': '109', 'Ds': '110',
-        'Rg': '111', 'Cn': '112', 'Uut': '113', 'Fl': '114', 'Uup': '115', 'Lv': '116', 'Uus': '117', 'Uuo': '118'}
+Z_nr = {'H':  '001', 'He': '002', 'Li': '003', 'Be': '004', 'B':  '005',
+        'C':  '006', 'N':  '007', 'O':  '008', 'F':  '009', 'Ne': '010',
+        'Na': '011', 'Mg': '012', 'Al': '013', 'Si': '014', 'P':  '015',
+        'S':  '016', 'Cl': '017', 'Ar': '018', 'K':  '019', 'Ca': '020',
+        'Sc': '021', 'Ti': '022', 'V':  '023', 'Cr': '024', 'Mn': '025',
+        'Fe': '026', 'Co': '027', 'Ni': '028', 'Cu': '029', 'Zn': '030',
+        'Ga': '031', 'Ge': '032', 'As': '033', 'Se': '034', 'Br': '035',
+        'Kr': '036', 'Rb': '037', 'Sr': '038', 'Y':  '039', 'Zr': '040',
+        'Nb': '041', 'Mo': '042', 'Tc': '043', 'Ru': '044', 'Rh': '045',
+        'Pd': '046', 'Ag': '047', 'Cd': '048', 'In': '049', 'Sn': '050',
+        'Sb': '051', 'Te': '052', 'I':  '053', 'Xe': '054', 'Cs': '055',
+        'Ba': '056', 'La': '057', 'Ce': '058', 'Pr': '059', 'Nd': '060',
+        'Pm': '061', 'Sm': '062', 'Eu': '063', 'Gd': '064', 'Tb': '065',
+        'Dy': '066', 'Ho': '067', 'Er': '068', 'Tm': '069', 'Yb': '070',
+        'Lu': '071', 'Hf': '072', 'Ta': '073', 'W':  '074', 'Re': '075',
+        'Os': '076', 'Ir': '077', 'Pt': '078', 'Au': '079', 'Hg': '080',
+        'Tl': '081', 'Pb': '082', 'Bi': '083', 'Po': '084', 'At': '085',
+        'Rn': '086', 'Fr': '087', 'Ra': '088', 'Ac': '089', 'Th': '090',
+        'Pa': '091', 'U':  '092', 'Np': '093', 'Pu': '094', 'Am': '095',
+        'Cm': '096', 'Bk': '097', 'Cf': '098', 'Es': '099', 'Fm': '100',
+        'Md': '101', 'No': '102', 'Lr': '103', 'Rf': '104', 'Db': '105',
+        'Sg': '106', 'Bh': '107', 'Hs': '108', 'Mt': '109', 'Ds': '110',
+        'Rg': '111', 'Cn': '112', 'Uut': '113', 'Fl': '114', 'Uup': '115',
+        'Lv': '116', 'Uus': '117', 'Uuo': '118'}
 
 """
 ###########################################
@@ -186,8 +196,13 @@ class Manager:
             try:
                 self.args.processes = multiprocessing.cpu_count()
             except NotImplementedError:
-                sys.exit("Could not find cpu count. Specify -p N") 
-        self.use_multiprocessing = self.args.processes > 0
+                sys.exit("Could not find cpu count. Specify -p N")
+
+        if args.processes is not None:
+            self.use_multiprocessing = True
+        else:
+            self.use_multiprocessing = False
+
         # Multiprocessing and MPI may not be used in conjunction
         if self.use_MPI and self.use_multiprocessing:
             print("Multiprocessing can not be used with MPI")
@@ -229,6 +244,8 @@ class Manager:
             self.logger.debug("Sending reader to %s", n)
             comm.send(self.reader, dest=n, tag=1)
 
+        self.get_checkpoint()
+
     def __enter__(self):
         """ In order to be used with the with-statement """
         return self
@@ -236,7 +253,7 @@ class Manager:
     def __exit__(self, exc_type, exc_value, traceback):
         """ Shut down the children when exiting """
         for rank in range(1, self.mpisize):
-            print("Sending stop to", rank)
+            self.logger.debug("Sending stop to", rank)
             comm.send(("stop",)*5, dest=rank)
 
     def count(self, values):
@@ -253,6 +270,40 @@ class Manager:
             for m in masses[e]:
                 for p in product(*values):
                     self.counter_max += 1
+
+    def make_checkpoint(self, msg):
+        """ Overwrite the checkpoint file with a new checkpoint
+
+        Parameters: None
+        Returns:    None
+        Algorithm:  Open checkpointfile and write {Element} {Mass}
+        """
+        with open(os.path.join(self.root_directory, "checkpoint"), "w") as chkfile:
+            chkfile.write(msg)
+
+    def get_checkpoint(self):
+        """ Get the checkpoint of a previous run
+
+        Parameters: None
+        Returns:    None
+        Algorithm:  Check if --resume is set. If it is, find previous
+                    TALYS-folders and use the checkpoint in the penultimate
+                    (the ultimate is created by this process)
+        """
+        if self.args.resume:
+            folders = [os.path.abspath(name) for name in os.listdir(".") if
+                       os.path.isdir(name) and "TALYS" in name]
+            if len(folders) > 1:
+                names = [name for name in os.listdir(folders[-2])]
+                if "checkpoint" in names:
+                    with open(os.path.join(folders[-2], "checkpoint"), "r") as checkpointfile:
+                        self.checkpoint_list = checkpointfile.readline().split(" ")
+                        self.logger.debug("Checkpoint is %s-%s", *self.checkpoint_list)
+                    return
+
+            self.logger.warning("Could not resume. Running as normal")
+            self.args.resume = False
+
 
     def init_logger(self):
         """ Set up logging
@@ -272,7 +323,7 @@ class Manager:
         """
 
         # Use a multiprocessing-safe logger if --processes is set
-        if self.use_multiprocessing > 0:
+        if self.use_multiprocessing:
             self.logger = multiprocessing.get_logger()
         else:
             self.logger = logging.getLogger()
@@ -290,7 +341,7 @@ class Manager:
         if not self.args.disable_filters:
             self.logger.addFilter(NoMultiProcessingFilter())
             self.logger.addFilter(NoMmapFilter())
-
+    
         # File Handler - writes log messages to log file
         log_handle = logging.FileHandler(
             os.path.join(self.root_directory, self.args.log_filename))
@@ -322,7 +373,7 @@ class Manager:
         self.logger.addHandler(error_handle)
 
         # For debugging purposes
-        if self.args.processes > 0:
+        if self.use_multiprocessing:
             self.logger.debug(multiprocessing.current_process().pid)
         if self.use_MPI:
             self.logger.warning("Only rank 0 can use logging")
@@ -461,6 +512,8 @@ class Manager:
         outfile_input.write('mass {} \n'.format(mass))
         if not self.astro_yes:
             outfile_input.write('energy {} \n \n'.format(energy))
+        else:
+            outfile_input.write('energy 1\n')
 
         # Write the keyword and corresponding value
         for key, value in keywords.items():
@@ -540,7 +593,7 @@ class Manager:
 
         keywords["Z_nr"] = Z_nr
         structure = [
-            {"element": "{Z_nr[element]}{element}"},
+        {"element": "{Z_nr[element]}{element}"},
             {"mass": "{mass}{element}"},
             {"rest": ""},
         ]
@@ -644,7 +697,13 @@ class Manager:
                     and conditionals, set up and handle the multiprocessing,
                     create the final directory and run self.run_talys()
         """
-
+        if self.args.resume:
+            if self.checkpoint_list == [keywords["element"], str(keywords["mass"])]:
+                self.args.resume = False
+            else:
+                self.logger.debug("Skipping %s-%s", keywords["element"], keywords["mass"])
+                return
+                
         # deepcopy the mutable variables to prevent processing mixup
         keywords = copy.deepcopy(keywords)
 
@@ -657,14 +716,13 @@ class Manager:
         talys_keywords = {}
 
         # Put the keys in alphabetical order
-        sorted_keys = keywords.keys()
+        sorted_keys = list(keywords.keys())
         sorted_keys.sort()
         for key in sorted_keys:
             # Only use keywords that vary, and astro
             if (len(self.reader[key]) > 1
                 and key != "element"
                 and key != "mass"):
-                #)   or key == "astro":
                 # the next two lists are in alphabetical order, and
                 # corresponding key-value pair have the same index
                 keys.append(key)
@@ -695,6 +753,8 @@ class Manager:
             self.count(values)
         # current_rank keeps track of how many available ranks there are
         # send_to_rank stores the rank to which information will be sent
+        self.make_checkpoint("{} {}".format(keywords["element"],
+                                            keywords["mass"]))
         for value in product(*values):
             # If --enable_pausing is set, check if execution shall pause
             if self.args.enable_pausing:
@@ -753,7 +813,8 @@ class Manager:
                     self.logger.debug("Waiting for available rank")
                     try:
                         self.send_to_rank, execution_time, errors = comm.recv(source=MPI.ANY_SOURCE)
-                        self.logger.info('(%s/%s) %s', self.counter.value,
+                        if execution_time != "null":
+                            self.logger.info('(%s/%s) %s', self.counter.value,
                                          self.counter_max,
                                          execution_time)
                         for error in errors:
@@ -851,8 +912,8 @@ class ChildRunner(Manager):
         self.rank = rank
         self.use_MPI = True
         self.reader = comm.recv(source=0, tag=1)
-        self.wait_for_root()
         self.directory = ''
+        self.wait_for_root()
 
     def wait_for_root(self):
         """ Waits for commands from the script running as rank 0
@@ -867,6 +928,7 @@ class ChildRunner(Manager):
                 if "stop" in name:
                     break
                 self.errors = []
+                self.execution_time = "null"
                 self.run_talys(work_directory, result_directory,
                                mass, element, name)
                 comm.send((self.rank, self.execution_time, self.errors), dest=0)
@@ -894,7 +956,7 @@ class ChildRunner(Manager):
         stdout, _ = process.communicate()
         os.remove(os.path.join(work_directory, "talys"))
         if stdout:
-            self.errors.append("TALYS could not be run: ".format(stdout.rstrip()))
+            self.errors.append("TALYS could not be run: {}".format(stdout.rstrip()))
             return 
 
         elapsed = time.strftime("%M:%S", time.localtime(time.time() - start))
