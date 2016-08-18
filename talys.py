@@ -1,6 +1,7 @@
 #! /usr/bin/python
 """
 Last updated 5th of August 2016
+Compatible with both Python 2.7 and Python 3
 This script is written to greatly simplify using TALYS. The main features are
 - Assign ranges for the TALYS keywords
 - Create a clean and customisable directory structure
@@ -22,7 +23,7 @@ The script is split into logical parts:
   while the final functions set up in TALYS input files and multiprocessing.
 
 Use of MPI
-MPI is supported, but some remarks about caution must be made. Since fork() is
+MPI is supported, but some cautious remarks must be made. Since fork() is
 called, the implementation of MPI used might not put all of the child processes
 on different cores, resulting in a catastrophic increase in computing time.
 The increase can be anything from 2x to 60x. To prevent this from happening,
@@ -31,11 +32,9 @@ assigning. An example would be
 #SBATCH --ntasks 64
 mpirun -nooversubscribe -np 50 python talys.py
 
-This script is written in Python 2.7. If the readers wish to use Python 3,
-that is entirely possible, as only as few lines is necessary to be changed.
-
-TODO: Add failsafe for multiprocessing
-TODO: Check alternatives for os.system on MPI
+TODO: Add failsafe for multiprocessing. Very technically challenging
+TODO: Find talys version. Not technically possible without reverse engineering
+TODO: Maybe look into os.sched_* for controlling cpy affinity
 ##########################################
 Imports
 ##########################################
@@ -62,18 +61,30 @@ from readers import *                    # The input readers
 Global Variables
 ##########################################
 """
-Z_nr = {'H': '001',  'He': '002', 'Li': '003',  'Be': '004', 'B': '005',   'C': '006',  'N': '007',   'O': '008',  'F': '009',  'Ne': '010',
-        'Na': '011', 'Mg': '012', 'Al': '013',  'Si': '014', 'P': '015',   'S': '016',  'Cl': '017',  'Ar': '018', 'K': '019',  'Ca': '020',
-        'Sc': '021', 'Ti': '022', 'V': '023',   'Cr': '024', 'Mn': '025',  'Fe': '026', 'Co': '027',  'Ni': '028', 'Cu': '029', 'Zn': '030',
-        'Ga': '031', 'Ge': '032', 'As': '033',  'Se': '034', 'Br': '035',  'Kr': '036', 'Rb': '037',  'Sr': '038', 'Y': '039',  'Zr': '040',
-        'Nb': '041', 'Mo': '042', 'Tc': '043',  'Ru': '044', 'Rh': '045',  'Pd': '046', 'Ag': '047',  'Cd': '048', 'In': '049', 'Sn': '050',
-        'Sb': '051', 'Te': '052', 'I': '053',   'Xe': '054', 'Cs': '055',  'Ba': '056', 'La': '057',  'Ce': '058', 'Pr': '059', 'Nd': '060',
-        'Pm': '061', 'Sm': '062', 'Eu': '063',  'Gd': '064', 'Tb': '065',  'Dy': '066', 'Ho': '067',  'Er': '068', 'Tm': '069', 'Yb': '070',
-        'Lu': '071', 'Hf': '072', 'Ta': '073',  'W': '074',  'Re': '075',  'Os': '076', 'Ir': '077',  'Pt': '078', 'Au': '079', 'Hg': '080',
-        'Tl': '081', 'Pb': '082', 'Bi': '083',  'Po': '084', 'At': '085',  'Rn': '086', 'Fr': '087',  'Ra': '088', 'Ac': '089', 'Th': '090',
-        'Pa': '091', 'U': '092',  'Np': '093',  'Pu': '094', 'Am': '095',  'Cm': '096', 'Bk': '097',  'Cf': '098', 'Es': '099', 'Fm': '100',
-        'Md': '101', 'No': '102', 'Lr': '103',  'Rf': '104', 'Db': '105',  'Sg': '106', 'Bh': '107',  'Hs': '108', 'Mt': '109', 'Ds': '110',
-        'Rg': '111', 'Cn': '112', 'Uut': '113', 'Fl': '114', 'Uup': '115', 'Lv': '116', 'Uus': '117', 'Uuo': '118'}
+Z_nr = {'H':  '001', 'He': '002', 'Li': '003', 'Be': '004', 'B':  '005',
+        'C':  '006', 'N':  '007', 'O':  '008', 'F':  '009', 'Ne': '010',
+        'Na': '011', 'Mg': '012', 'Al': '013', 'Si': '014', 'P':  '015',
+        'S':  '016', 'Cl': '017', 'Ar': '018', 'K':  '019', 'Ca': '020',
+        'Sc': '021', 'Ti': '022', 'V':  '023', 'Cr': '024', 'Mn': '025',
+        'Fe': '026', 'Co': '027', 'Ni': '028', 'Cu': '029', 'Zn': '030',
+        'Ga': '031', 'Ge': '032', 'As': '033', 'Se': '034', 'Br': '035',
+        'Kr': '036', 'Rb': '037', 'Sr': '038', 'Y':  '039', 'Zr': '040',
+        'Nb': '041', 'Mo': '042', 'Tc': '043', 'Ru': '044', 'Rh': '045',
+        'Pd': '046', 'Ag': '047', 'Cd': '048', 'In': '049', 'Sn': '050',
+        'Sb': '051', 'Te': '052', 'I':  '053', 'Xe': '054', 'Cs': '055',
+        'Ba': '056', 'La': '057', 'Ce': '058', 'Pr': '059', 'Nd': '060',
+        'Pm': '061', 'Sm': '062', 'Eu': '063', 'Gd': '064', 'Tb': '065',
+        'Dy': '066', 'Ho': '067', 'Er': '068', 'Tm': '069', 'Yb': '070',
+        'Lu': '071', 'Hf': '072', 'Ta': '073', 'W':  '074', 'Re': '075',
+        'Os': '076', 'Ir': '077', 'Pt': '078', 'Au': '079', 'Hg': '080',
+        'Tl': '081', 'Pb': '082', 'Bi': '083', 'Po': '084', 'At': '085',
+        'Rn': '086', 'Fr': '087', 'Ra': '088', 'Ac': '089', 'Th': '090',
+        'Pa': '091', 'U':  '092', 'Np': '093', 'Pu': '094', 'Am': '095',
+        'Cm': '096', 'Bk': '097', 'Cf': '098', 'Es': '099', 'Fm': '100',
+        'Md': '101', 'No': '102', 'Lr': '103', 'Rf': '104', 'Db': '105',
+        'Sg': '106', 'Bh': '107', 'Hs': '108', 'Mt': '109', 'Ds': '110',
+        'Rg': '111', 'Cn': '112', 'Uut': '113', 'Fl': '114', 'Uup': '115',
+        'Lv': '116', 'Uus': '117', 'Uuo': '118'}
 
 """
 ###########################################
@@ -183,8 +194,13 @@ class Manager:
             try:
                 self.args.processes = multiprocessing.cpu_count()
             except NotImplementedError:
-                sys.exit("Could not find cpu count. Specify -p N") 
-        self.use_multiprocessing = self.args.processes > 0
+                sys.exit("Could not find cpu count. Specify -p N")
+
+        if args.processes is not None:
+            self.use_multiprocessing = True
+        else:
+            self.use_multiprocessing = False
+
         # Multiprocessing and MPI may not be used in conjunction
         if self.use_MPI and self.use_multiprocessing:
             print("Multiprocessing can not be used with MPI")
@@ -209,6 +225,11 @@ class Manager:
         # The current MPI rank to send to
         self.send_to_rank = 1
 
+        if self.args.dummy:
+            self.indices_directory = "indices"
+            self.index_counter = 1
+            mkdir(self.indices_directory)
+
         # Create the root directory named by the current date and time
         self.root_directory = 'TALYS-calculations-{}-{}'.format(
             time.strftime('%y%m%d'), time.strftime('%H%M%S'))
@@ -226,6 +247,8 @@ class Manager:
             self.logger.debug("Sending reader to %s", n)
             comm.send(self.reader, dest=n, tag=1)
 
+        self.get_checkpoint()
+
     def __enter__(self):
         """ In order to be used with the with-statement """
         return self
@@ -233,7 +256,7 @@ class Manager:
     def __exit__(self, exc_type, exc_value, traceback):
         """ Shut down the children when exiting """
         for rank in range(1, self.mpisize):
-            print("Sending stop to", rank)
+            self.logger.debug("Sending stop to", rank)
             comm.send(("stop",)*5, dest=rank)
 
     def count(self, values):
@@ -250,6 +273,40 @@ class Manager:
             for m in masses[e]:
                 for p in product(*values):
                     self.counter_max += 1
+
+    def make_checkpoint(self, msg):
+        """ Overwrite the checkpoint file with a new checkpoint
+
+        Parameters: None
+        Returns:    None
+        Algorithm:  Open checkpointfile and write {Element} {Mass}
+        """
+        with open(os.path.join(self.root_directory, "checkpoint"), "w") as chkfile:
+            chkfile.write(msg)
+
+    def get_checkpoint(self):
+        """ Get the checkpoint of a previous run
+
+        Parameters: None
+        Returns:    None
+        Algorithm:  Check if --resume is set. If it is, find previous
+                    TALYS-folders and use the checkpoint in the penultimate
+                    (the ultimate is created by this process)
+        """
+        if self.args.resume:
+            folders = [os.path.abspath(name) for name in os.listdir(".") if
+                       os.path.isdir(name) and "TALYS" in name]
+            if len(folders) > 1:
+                names = [name for name in os.listdir(folders[-2])]
+                if "checkpoint" in names:
+                    with open(os.path.join(folders[-2], "checkpoint"), "r") as checkpointfile:
+                        self.checkpoint_list = checkpointfile.readline().split(" ")
+                        self.logger.debug("Checkpoint is %s-%s", *self.checkpoint_list)
+                    return
+
+            self.logger.warning("Could not resume. Running as normal")
+            self.args.resume = False
+
 
     def init_logger(self):
         """ Set up logging
@@ -269,7 +326,7 @@ class Manager:
         """
 
         # Use a multiprocessing-safe logger if --processes is set
-        if self.use_multiprocessing > 0:
+        if self.use_multiprocessing:
             self.logger = multiprocessing.get_logger()
         else:
             self.logger = logging.getLogger()
@@ -287,7 +344,7 @@ class Manager:
         if not self.args.disable_filters:
             self.logger.addFilter(NoMultiProcessingFilter())
             self.logger.addFilter(NoMmapFilter())
-
+    
         # File Handler - writes log messages to log file
         log_handle = logging.FileHandler(
             os.path.join(self.root_directory, self.args.log_filename))
@@ -319,7 +376,7 @@ class Manager:
         self.logger.addHandler(error_handle)
 
         # For debugging purposes
-        if self.args.processes > 0:
+        if self.use_multiprocessing:
             self.logger.debug(multiprocessing.current_process().pid)
         if self.use_MPI:
             self.logger.warning("Only rank 0 can use logging")
@@ -378,9 +435,9 @@ class Manager:
         outfile.write('\n\n{:<{}s} {}'.format(
             "name of energy file:", padding_size, input['energy'][0]))
         outfile.write('\n{:<{}s} {}'.format(
-            "energy min:", padding_size, input['E1']))
+            "energy min:", padding_size, input['energy_start']))
         outfile.write('\n{:<{}s} {}'.format(
-            "energy max:", padding_size, input['E2']))
+            "energy max:", padding_size, input['energy_stop']))
         outfile.write('\n{:<{}s} {}'.format(
             "number of energies:", padding_size, input['N']))
 
@@ -407,8 +464,8 @@ class Manager:
         if "n" in input["astro"] or "no" in input["astro"]:
             self.astro_yes = False
             # Create energy input
-            energies = np.linspace(float(self.reader['E1']),
-                                   float(self.reader['E2']),
+            energies = np.linspace(float(self.reader['energy_start']),
+                                   float(self.reader['energy_stop']),
                                    float(self.reader['N']))
             # Outfile named energy_file
             outfile_energy = open(os.path.join(self.root_directory, self.reader['energy'][0]), 'w')
@@ -424,11 +481,10 @@ class Manager:
 
         outfile.close()
 
-    def make_input_file(self, keywords, directories):
+    def make_input_file(self, keywords):
         """ Creates the inputfile for TALYS
 
         Parameters: keywords: the input options
-                    directories: a dictionary to store the directory names
         Returns:    None
         Alogrithm:  Write a few lines of comment to explain the reaction and
                     write all of the TALYS keywords given in the input
@@ -443,7 +499,7 @@ class Manager:
 
         # Open the file and begin writing
         outfile_input = open(os.path.join(
-            directories["rest_directory"],
+            self.rest_directory,
             self.reader["input_file"]), 'w')
         # This shows the reaction taking place, e.g 159Eu(n,g)160Eu
         reaction_line = '{}{}({},g){}{}'.format(mass, element, projectile,
@@ -473,7 +529,7 @@ class Manager:
             # Copy energy file  to isotope directory
             src_energy_new = os.path.join(
                 self.root_directory, energy)
-            dst_energy_input = directories["rest_directory"]
+            dst_energy_input = self.rest_directory
             shutil.copy(src_energy_new, dst_energy_input)
 
     def run(self):
@@ -520,50 +576,41 @@ class Manager:
         # Do a deepcopy to prevent multiprocessing mixing
         keywords = copy.deepcopy(self.reader.keywords)
 
-        # directories keep the values of each file path and directory path
-        # to 1) make it possible to add to it 2) prevent subprocesses from
-        # adding and removing from eachothers directories 3) make it easier
-        # to send names and paths through functions
-        directories = {}
-
-        directories["root_directory"] = self.root_directory
-
         # Make the info file.
         self.make_info_file()
 
         # In the root directory, create a new directory to store the computations
-        directories["original_data"] = os.path.join(
-            directories["root_directory"], "original_data")
-        mkdir(directories["original_data"])
+        self.top_original_directory = os.path.join(
+            self.root_directory, "original_data")
+        mkdir(self.top_original_directory)
 
         # In the root directory, create a new direcotry to store the results
-        directories["results_data"] = os.path.join(
-            directories["root_directory"], "results_data")
-        mkdir(directories["results_data"])
+        self.top_result_directory = os.path.join(
+            self.root_directory, "results_data")
+        mkdir(self.top_result_directory)
 
         # Change the "current" directories. The working directory doesnt
         # actually change
-        directories["current_orig"] = directories["original_data"]
-        directories["current_res"] = directories["results_data"]
+        self.work_directory = self.top_original_directory
+        self.result_directory = self.top_result_directory
 
         keywords["Z_nr"] = Z_nr
         structure = [
-            {"element": "{Z_nr[element]}{element}"},
+        {"element": "{Z_nr[element]}{element}"},
             {"mass": "{mass}{element}"},
             {"rest": ""},
         ]
         # Run the rest
-        self.run_deeper(keywords, directories, structure)
+        self.run_deeper(keywords, structure)
 
         # When the script has completed, log the total time
         elapsed = time.strftime("%H:%M:%S", time.localtime(time.time() - start))
         self.logger.info("Total elapsed time: %s", elapsed)
 
-    def run_deeper(self, keywords, directories, structure):
+    def run_deeper(self, keywords, structure):
         """ A recursive function that creates the directory structure
 
         Parameters: keywords: the input keywords
-                    directories: a dictionary to store the directory names
                     structure: a list of {name:style} describing the directory
                     names. Index 0 is the top of the directory, with each
                     subsequent directory having some knowledge of the previous,
@@ -575,10 +622,6 @@ class Manager:
         # Deepcopy the mutable variables to prevent processing mixup
         structure = copy.deepcopy(structure)
         keywords = copy.deepcopy(keywords)
-        directories = copy.deepcopy(directories)
-
-        # Create an instance of the custom formatter
-        fmt = StyleFormatter()
 
         # Iterate through the list consiting of [{name:style}, {name:style} ...]
         for name, style in structure[0].items():
@@ -589,7 +632,7 @@ class Manager:
 
             # If the name is "rest", talys will be run
             if name == "rest":
-                self.run_rest(keywords, directories)
+                self.run_rest(keywords)
             else:
                 # If not, create the directories and go to the next level
                 # tmp_keywords is used if the keyword is a dict in order to
@@ -604,15 +647,14 @@ class Manager:
                 # new_keywords is to overwrite the keywords[name] without
                 # interfeering with the next iteration of the loop
                 new_keywords = copy.deepcopy(tmp_keywords)
-                current_orig = directories["current_orig"]
-                current_res = directories["current_res"]
+                current_orig = self.work_directory
+                current_res = self.result_directory
                 for keyword in tmp_keywords[name]:
                     # ex. tmp_keywords["element"] = ["Pm", "Sm", "Tb"]
                     #     keyword = "Pm"
                     #     new_keywords["element"] = "Pm"
                     new_keywords[name] = keyword
                     self.run_deeper_useless_function(keywords=new_keywords,
-                                                     directories=directories,
                                                      keyword=keyword,
                                                      current_orig=current_orig,
                                                      current_res=current_res,
@@ -621,46 +663,49 @@ class Manager:
                                                      structure=structure)
 
     @support_multiprocessing(check_list=True)
-    def run_deeper_useless_function(self, keywords, directories, keyword,
+    def run_deeper_useless_function(self, keywords, keyword,
                                     current_orig, current_res, name,
                                     style, structure):
         """ Split from run_deeper to support multiprocessing """
         fmt = StyleFormatter()
         # Create the directories with names according to the style
-        directories["current_orig"] = os.path.join(
+        self.work_directory = os.path.join(
             current_orig, fmt.format(style, **keywords))
-        directories["current_res"] = os.path.join(
+        self.result_directory = os.path.join(
             current_res, fmt.format(style, **keywords))
-        mkdir(directories["current_orig"])
-        mkdir(directories["current_res"])
+        mkdir(self.work_directory)
+        mkdir(self.result_directory)
         # This is an ugly piece of code. Since the "mass" keyword
         # is dependent on the current element, the current element
         # must be stored for this function to work
         keywords["prev_keyword"] = keyword
-        self.run_deeper(keywords, directories, structure)
+        self.run_deeper(keywords, structure)
         if self.use_multiprocessing and False:
             self.logger.debug("%s is terminating",
                               multiprocessing.current_process().pid)
             self.queue.put(multiprocessing.current_process().pid)
 
 
-    def run_rest(self, keywords, directories):
+    def run_rest(self, keywords):
         """ Creates the name of the final directory and calls self.run_talys()
 
         The format is keyword1value-keyword2value-...-conditional1name -
         conditional1value-conditional2name-conditional2value-...
         in alphabetical order
         Parameters: keywords: the input options
-                    directories: a dictionary over the directory names
-        Returns:    None
         Algorithm:  Sort the keywords, combine and iterate over the keywords
                     and conditionals, set up and handle the multiprocessing,
                     create the final directory and run self.run_talys()
         """
-
+        if self.args.resume:
+            if self.checkpoint_list == [keywords["element"], str(keywords["mass"])]:
+                self.args.resume = False
+            else:
+                self.logger.debug("Skipping %s-%s", keywords["element"], keywords["mass"])
+                return
+                
         # deepcopy the mutable variables to prevent processing mixup
         keywords = copy.deepcopy(keywords)
-        directories = copy.deepcopy(directories)
 
         # Z_nr and prev_keyword were added in the previous loop. Remove them
         del keywords["Z_nr"]
@@ -671,14 +716,13 @@ class Manager:
         talys_keywords = {}
 
         # Put the keys in alphabetical order
-        sorted_keys = keywords.keys()
+        sorted_keys = list(keywords.keys())
         sorted_keys.sort()
         for key in sorted_keys:
             # Only use keywords that vary, and astro
             if (len(self.reader[key]) > 1
                 and key != "element"
                 and key != "mass"):
-                #)   or key == "astro":
                 # the next two lists are in alphabetical order, and
                 # corresponding key-value pair have the same index
                 keys.append(key)
@@ -697,11 +741,6 @@ class Manager:
                                                        int(keywords["mass"])+1,
                                                        value)
 
-        # The queue is used to track the completed subprocesses.
-        # A queue is used since it is multiprocessing-safe
-        self.talys_queue = multiprocessing.Queue()
-        # talys_jobs contains the subprocesses
-        talys_jobs = []
         # Set the counter to inform the user on the progress
         # It is at this stage that the script knows how many iterations it
         # must do, so the counter_max is set only once - during the first run
@@ -709,13 +748,18 @@ class Manager:
             self.count(values)
         # current_rank keeps track of how many available ranks there are
         # send_to_rank stores the rank to which information will be sent
+        self.make_checkpoint("{} {}".format(keywords["element"],
+                                            keywords["mass"]))
         for value in product(*values):
+            talys_keywords_current = copy.deepcopy(talys_keywords)
+
             # If --enable_pausing is set, check if execution shall pause
             if self.args.enable_pausing:
                 if self.do_pause.value == 1:
                     self.logger.debug("Waiting to be restarted...")
                     self.pausing_queue.get()
                     self.logger.debug("Restarting")
+
             # 2) splits the result back into keywords and conditions
             keywordvals = value[:len(keys)]
             conditionkeys = value[len(keys):]
@@ -726,7 +770,7 @@ class Manager:
                 # Add to the name
                 name = "{}-{}".format(name, keywordvals[i])
                 # add the now one-option keyword to talys_keywords
-                talys_keywords[keys[i]] = keywordvals[i]
+                talys_keywords_current[keys[i]] = keywordvals[i]
 
             # Remove the unecessary -
             name = name[1:]
@@ -735,27 +779,27 @@ class Manager:
             for key in conditionkeys:
                 value = self.reader.get_condition_val(key)
                 name = "{}-{}-{}".format(name, key, value)
-                talys_keywords[key] = value
+                talys_keywords_current[key] = value
 
             keywords["name"] = name
 
             # Make all values to non-lists
-            for key, val in talys_keywords.items():
+            for key, val in talys_keywords_current.items():
                 if isinstance(val, (list, tuple)):
-                    talys_keywords[key] = val[0]
+                    talys_keywords_current[key] = val[0]
 
             # Make the directories
             if name:
-                directories["rest_directory"] = os.path.join(
-                    directories["current_orig"], name)
-                mkdir(directories["rest_directory"])
+                self.rest_directory = os.path.join(
+                    self.work_directory, name)
+                mkdir(self.rest_directory)
             else:
                 # If nothing varies, name the directories by a counter
-                directories["rest_directory"] = directories["current_orig"]
+                self.rest_directory = self.work_directory
 
             # Make input file
             try:
-                self.make_input_file(talys_keywords, directories)
+                self.make_input_file(talys_keywords_current)
             except Exception as exc:
                 # No biggie. Just print an error and move on
                 self.logger.error("An error occured with %s: %s", name, exc)
@@ -767,7 +811,8 @@ class Manager:
                     self.logger.debug("Waiting for available rank")
                     try:
                         self.send_to_rank, execution_time, errors = comm.recv(source=MPI.ANY_SOURCE)
-                        self.logger.info('(%s/%s) %s',self.counter.value,
+                        if execution_time != "null":
+                            self.logger.info('(%s/%s) %s', self.counter.value,
                                          self.counter_max,
                                          execution_time)
                         for error in errors:
@@ -776,8 +821,8 @@ class Manager:
                     finally:
                         self.logger.debug("Sending to %s", self.send_to_rank)
                     self.used_ranks -= 1
-                comm.send((directories["rest_directory"],
-                           directories["current_res"],
+                comm.send((self.rest_directory,
+                           self.result_directory,
                            keywords["mass"],
                            keywords["element"],
                            keywords["name"]),
@@ -786,48 +831,55 @@ class Manager:
                 self.send_to_rank = self.used_ranks
             else:
                 # No kind of multiprocessing
-                self.run_talys(keywords=keywords, directories=directories)
+                if not self.args.dummy:
+                    self.run_talys(keywords=keywords)
+                else:
+                    with open(
+                    os.path.join(self.indices_directory,
+                                 str(self.index_counter)), "w") as index_file:
+                        # The directory to work in
+                        index_file.write(self.rest_directory)
+                        index_file.write("\n")
+                        # The directory to store the results to
+                        name = keywords["name"] if keywords["name"] else ""
+                        index_file.write(
+                            os.path.join(self.result_directory,
+                                         name))
+                    self.index_counter += 1
 
     @support_multiprocessing()
-    def run_talys(self, keywords, directories):
+    def run_talys(self, keywords):
         """ Runs TALYS
 
         Parameters: keywords: the input options
-                    directories: a dictionary over the names of the directories
         Algorithm:  call system.fork() to run TALYS, and redirect the system
                     signals and standard outputs to this python script. Log
                     any errors and execution time
-        """
-        # Deepcopy the directories list to prevent multiprocessing mixup
-        directories = copy.deepcopy(directories)
-        directories["current_orig"] = directories["rest_directory"]
+p        """
 
         # Actually run TALYS and time its execution
         start = time.time()
-        with Cd(directories["current_orig"]):
-            process = subprocess.Popen('talys <{}> {}'.format(
-                self.reader["input_file"],
-                self.reader["output_file"]),
-                # Do not send signals to the subprocess
-                preexec_fn=os.setpgrp,
-                # Spawn a shell
-                shell=True,
-                # Send both stdout and stderr to pipe.stdout
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                # Don't know
-                close_fds=True)
-        # Get STDOUT and STDERR and see if they are non-empty
-        # (Both are sent to STDOUT)
-        stdout, _ = process.communicate()
-        if stdout:
-            self.logger.critical("TALYS could not be run: %s", stdout.rstrip())
-            return
-
+        with Cd(self.rest_directory):
+            process = subprocess.Popen("talys",
+                                       # Do not send signals to the subprocess
+                                       preexec_fn=os.setpgrp,
+                                       # Send the input file as stdin
+                                       stdin=open(self.reader["input_file"], "r"),
+                                       # Send stdout to the output file
+                                       stdout=open(self.reader["output_file"], "w"),
+                                       # Errors are sent to stderr
+                                       stderr=subprocess.PIPE,
+                                       # Close all file descriptors except 0, 1, 2, 3
+                                       close_fds=True)
+        # Check STDERR and see if they are non-empty
+        _, stderr = process.communicate()
+        if stderr:
+            self.logger.critical("talys could not be run: %s", stderr)
         elapsed = time.strftime("%M:%S", time.localtime(time.time() - start))
         info = "{mass}{element}-{name}".format(**keywords) if keywords["name"] else "{mass}{element}".format(**keywords)
         self.counter.value += 1
-        self.logger.info("(%s/%s) Execution time: %s by %s", self.counter.value,
+        self.logger.info("(%s/%s) Execution time: %s by %s",
+                         self.counter.value,
                          self.counter_max, elapsed, info)
 
         # Move result file to
@@ -835,8 +887,8 @@ class Manager:
         try:
             for filename in self.reader["result_files"]:
                 name = "{}-{}".format(keywords["name"], filename) if keywords["name"] else filename
-                shutil.copy(os.path.join(directories["current_orig"], filename),
-                            os.path.join(directories["current_res"],
+                shutil.copy(os.path.join(self.work_directory, filename),
+                            os.path.join(self.result_directory,
                                          name))
         except Exception as exc:
             # Give TALYS some time to write the output.txt
@@ -845,10 +897,10 @@ class Manager:
             self.logger.error(exc)
             # The filesize of output_file is an indicator of whether the
             # execution was successful or not
-            path = os.path.join(directories["current_orig"],
+            path = os.path.join(self.rest_directory,
                                 self.reader["output_file"])
             if os.path.getsize(path) < 600:
-                # execution failed. Open the file and log the output
+                # Execution failed. Open the file and log the output
                 with open(path, "r") as output_file:
                     msg = ''.join(output_file.readlines()).rstrip()
                 self.logger.error(msg[1:])
@@ -862,13 +914,13 @@ class Manager:
 
 # For MPI
 class ChildRunner(Manager):
-    # Remove Manager's init
+    # Replace Manager's init
     def __init__(self, rank):
         self.rank = rank
         self.use_MPI = True
         self.reader = comm.recv(source=0, tag=1)
-        self.wait_for_root()
         self.directory = ''
+        self.wait_for_root()
 
     def wait_for_root(self):
         """ Waits for commands from the script running as rank 0
@@ -883,6 +935,7 @@ class ChildRunner(Manager):
                 if "stop" in name:
                     break
                 self.errors = []
+                self.execution_time = "null"
                 self.run_talys(work_directory, result_directory,
                                mass, element, name)
                 comm.send((self.rank, self.execution_time, self.errors), dest=0)
@@ -890,29 +943,37 @@ class ChildRunner(Manager):
                 print("An error occured: ", e)
 
     def run_talys(self, work_directory, result_directory, mass, element, name):
+        """ Runs TALYS
+
+        Parameters: keywords: the input options
+        Algorithm:  call system.fork() to run TALYS, and redirect the system
+                    signals and standard outputs to this python script. Log
+                    any errors and execution time
+        """
+
         shutil.copy("talys", work_directory)
         start = time.time()
         with Cd(work_directory):
-            process = subprocess.Popen('./talys <{}> {}'.format(
-                self.reader["input_file"],
-                self.reader["output_file"]),
+            process = subprocess.Popen("./talys",
                                        # Do not send signals to the subprocess
-                preexec_fn=os.setpgrp,
-                                       # Spawn a shell
-                shell=True,
-                                       # Send both stdout and stderr to pipe.stdout
-                stdout=subprocess.PIPE,
-                                       stderr=subprocess.STDOUT,
-                                       # Don't know
-                close_fds=True)
-        # Get STDOUT and STDERR and see if they are non-empty
-        # (Both are sent to STDOUT)
-        stdout, _ = process.communicate()
-        os.remove(os.path.join(work_directory, "talys"))
-        if stdout:
-            self.errors.append("TALYS could not be run: ".format(stdout.rstrip()))
-            return 
+                                       preexec_fn=os.setpgrp,
+                                       # Send the input file as stdin
+                                       stdin=open(self.reader["input_file"], "r"),
+                                       # Send stdout to the output file
+                                       stdout=open(self.reader["output_file"], "w"),
+                                       # Errors are sent to stderr
+                                       stderr=subprocess.PIPE,
+                                       # Close all file descriptors except 0, 1, 2, 3
+                                       close_fds=True)
 
+        # Check STDERR and see if they are non-empty
+        _, stderr = process.communicate()
+
+        if stderr:
+            self.errors.append("TALYS could not be run: {}".format(stderr.rstrip()))
+            return
+
+        os.remove(os.path.join(work_directory, "talys"))
         elapsed = time.strftime("%M:%S", time.localtime(time.time() - start))
         info = "{}{}-{}".format(mass, element, name) if name else "{}{}".format(mass, element)
         self.execution_time = "Execution time: {} by {}".format(elapsed, info)
@@ -939,43 +1000,6 @@ class ChildRunner(Manager):
                 with open(path, "r") as output_file:
                     msg = ''.join(output_file.readlines()).rstrip()
                     self.errors.append(msg[1:])
-
-    def _run_talys(self, keywords, directories):
-        """ Runs TALYS
-
-        Parameters: keywords: the input options
-                    directories: a dictionary over the names of the directories
-        Algorithm:  call system.fork() to run TALYS, and redirect the system
-                    signals and standard outputs to this python script. Log
-                    any errors and execution time
-        """
-        directories["current_orig"] = directories["rest_directory"]
-
-        shutil.copy("talys", directories["current_orig"])
-
-        # Actually run TALYS and time its execution
-        start = time.time()
-        with Cd(directories["current_orig"]):
-            os.system("./talys <{}> {}".format(
-                self.reader["input_file"],
-                self.reader["output_file"]))
-            os.remove("talys")
-
-        elapsed = time.strftime("%M:%S", time.localtime(time.time() - start))
-        info = "{mass}{element}-{name}".format(**keywords) if keywords["name"] else "{mass}{element}".format(**keywords)
-        # When running MPI, the scripts has no knowlegde of neither the
-        # logger nor the counters
-        self.execution_time = "Execution time: {} by {}".format(elapsed, info)
-        # Move result file to
-        # TALYS-calculations-date-time/result_files/element/isotope
-        try:
-            for filename in self.reader["result_files"]:
-                name = "{}-{}".format(keywords["name"], filename) if keywords["name"] else filename
-                shutil.copy(os.path.join(directories["current_orig"], filename),
-                            os.path.join(directories["current_res"],
-                                         name))
-        except Exception as exc:
-            print("Error: ", exc)
 
 # Keep the script from running if imported as a module
 if __name__ == "__main__":
@@ -1025,4 +1049,3 @@ if __name__ == "__main__":
     else:
         # The other processes run TALYS, but must wait for root
         ChildRunner(rank)
-
