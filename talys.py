@@ -1,6 +1,7 @@
 #! /usr/bin/python
 """
 Last updated 5th of August 2016
+Compatible with both Python 2.7 and Python 3
 This script is written to greatly simplify using TALYS. The main features are
 - Assign ranges for the TALYS keywords
 - Create a clean and customisable directory structure
@@ -22,7 +23,7 @@ The script is split into logical parts:
   while the final functions set up in TALYS input files and multiprocessing.
 
 Use of MPI
-MPI is supported, but some remarks about caution must be made. Since fork() is
+MPI is supported, but some cautious remarks must be made. Since fork() is
 called, the implementation of MPI used might not put all of the child processes
 on different cores, resulting in a catastrophic increase in computing time.
 The increase can be anything from 2x to 60x. To prevent this from happening,
@@ -31,12 +32,9 @@ assigning. An example would be
 #SBATCH --ntasks 64
 mpirun -nooversubscribe -np 50 python talys.py
 
-This script is written in Python 2.7. If the readers wish to use Python 3,
-that is entirely possible, as only as few lines is necessary to be changed.
-
-TODO: Add failsafe for multiprocessing. Very technically challengig
-TODO: Rewrite formatter and make the code Python3 friendly
+TODO: Add failsafe for multiprocessing. Very technically challenging
 TODO: Find talys version. Not technically possible without reverse engineering
+TODO: Maybe look into os.sched_* for controlling cpy affinity
 ##########################################
 Imports
 ##########################################
@@ -226,6 +224,11 @@ class Manager:
         self.used_ranks = 1
         # The current MPI rank to send to
         self.send_to_rank = 1
+
+        if self.args.dummy:
+            self.indices_directory = "indices"
+            self.index_counter = 1
+            mkdir(self.indices_directory)
 
         # Create the root directory named by the current date and time
         self.root_directory = 'TALYS-calculations-{}-{}'.format(
@@ -432,9 +435,9 @@ class Manager:
         outfile.write('\n\n{:<{}s} {}'.format(
             "name of energy file:", padding_size, input['energy'][0]))
         outfile.write('\n{:<{}s} {}'.format(
-            "energy min:", padding_size, input['E1']))
+            "energy min:", padding_size, input['energy_start']))
         outfile.write('\n{:<{}s} {}'.format(
-            "energy max:", padding_size, input['E2']))
+            "energy max:", padding_size, input['energy_stop']))
         outfile.write('\n{:<{}s} {}'.format(
             "number of energies:", padding_size, input['N']))
 
@@ -461,8 +464,8 @@ class Manager:
         if "n" in input["astro"] or "no" in input["astro"]:
             self.astro_yes = False
             # Create energy input
-            energies = np.linspace(float(self.reader['E1']),
-                                   float(self.reader['E2']),
+            energies = np.linspace(float(self.reader['energy_start']),
+                                   float(self.reader['energy_stop']),
                                    float(self.reader['N']))
             # Outfile named energy_file
             outfile_energy = open(os.path.join(self.root_directory, self.reader['energy'][0]), 'w')
@@ -620,9 +623,6 @@ class Manager:
         structure = copy.deepcopy(structure)
         keywords = copy.deepcopy(keywords)
 
-        # Create an instance of the custom formatter
-        fmt = StyleFormatter()
-
         # Iterate through the list consiting of [{name:style}, {name:style} ...]
         for name, style in structure[0].items():
             # The for loop is needed to keep the iteration going, but in
@@ -741,11 +741,6 @@ class Manager:
                                                        int(keywords["mass"])+1,
                                                        value)
 
-        # The queue is used to track the completed subprocesses.
-        # A queue is used since it is multiprocessing-safe
-        self.talys_queue = multiprocessing.Queue()
-        # talys_jobs contains the subprocesses
-        talys_jobs = []
         # Set the counter to inform the user on the progress
         # It is at this stage that the script knows how many iterations it
         # must do, so the counter_max is set only once - during the first run
@@ -756,12 +751,15 @@ class Manager:
         self.make_checkpoint("{} {}".format(keywords["element"],
                                             keywords["mass"]))
         for value in product(*values):
+            talys_keywords_current = copy.deepcopy(talys_keywords)
+
             # If --enable_pausing is set, check if execution shall pause
             if self.args.enable_pausing:
                 if self.do_pause.value == 1:
                     self.logger.debug("Waiting to be restarted...")
                     self.pausing_queue.get()
                     self.logger.debug("Restarting")
+
             # 2) splits the result back into keywords and conditions
             keywordvals = value[:len(keys)]
             conditionkeys = value[len(keys):]
@@ -772,7 +770,7 @@ class Manager:
                 # Add to the name
                 name = "{}-{}".format(name, keywordvals[i])
                 # add the now one-option keyword to talys_keywords
-                talys_keywords[keys[i]] = keywordvals[i]
+                talys_keywords_current[keys[i]] = keywordvals[i]
 
             # Remove the unecessary -
             name = name[1:]
@@ -781,14 +779,14 @@ class Manager:
             for key in conditionkeys:
                 value = self.reader.get_condition_val(key)
                 name = "{}-{}-{}".format(name, key, value)
-                talys_keywords[key] = value
+                talys_keywords_current[key] = value
 
             keywords["name"] = name
 
             # Make all values to non-lists
-            for key, val in talys_keywords.items():
+            for key, val in talys_keywords_current.items():
                 if isinstance(val, (list, tuple)):
-                    talys_keywords[key] = val[0]
+                    talys_keywords_current[key] = val[0]
 
             # Make the directories
             if name:
@@ -801,7 +799,7 @@ class Manager:
 
             # Make input file
             try:
-                self.make_input_file(talys_keywords)
+                self.make_input_file(talys_keywords_current)
             except Exception as exc:
                 # No biggie. Just print an error and move on
                 self.logger.error("An error occured with %s: %s", name, exc)
@@ -833,7 +831,21 @@ class Manager:
                 self.send_to_rank = self.used_ranks
             else:
                 # No kind of multiprocessing
-                self.run_talys(keywords=keywords)
+                if not self.args.dummy:
+                    self.run_talys(keywords=keywords)
+                else:
+                    with open(
+                    os.path.join(self.indices_directory,
+                                 str(self.index_counter)), "w") as index_file:
+                        # The directory to work in
+                        index_file.write(self.rest_directory)
+                        index_file.write("\n")
+                        # The directory to store the results to
+                        name = keywords["name"] if keywords["name"] else ""
+                        index_file.write(
+                            os.path.join(self.result_directory,
+                                         name))
+                    self.index_counter += 1
 
     @support_multiprocessing()
     def run_talys(self, keywords):
@@ -843,31 +855,26 @@ class Manager:
         Algorithm:  call system.fork() to run TALYS, and redirect the system
                     signals and standard outputs to this python script. Log
                     any errors and execution time
-        """
-        self.work_directory = self.rest_directory
+p        """
 
         # Actually run TALYS and time its execution
         start = time.time()
-        with Cd(self.work_directory):
-            process = subprocess.Popen('talys <{}> {}'.format(
-                self.reader["input_file"],
-                self.reader["output_file"]),
-                # Do not send signals to the subprocess
-                preexec_fn=os.setpgrp,
-                # Spawn a shell
-                shell=True,
-                # Send both stdout and stderr to pipe.stdout
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                # Don't know
-                close_fds=True)
-        # Get STDOUT and STDERR and see if they are non-empty
-        # (Both are sent to STDOUT)
-        stdout, _ = process.communicate()
-        if stdout:
-            self.logger.critical("TALYS could not be run: %s", stdout.rstrip())
-            return
-
+        with Cd(self.rest_directory):
+            process = subprocess.Popen("talys",
+                                       # Do not send signals to the subprocess
+                                       preexec_fn=os.setpgrp,
+                                       # Send the input file as stdin
+                                       stdin=open(self.reader["input_file"], "r"),
+                                       # Send stdout to the output file
+                                       stdout=open(self.reader["output_file"], "w"),
+                                       # Errors are sent to stderr
+                                       stderr=subprocess.PIPE,
+                                       # Close all file descriptors except 0, 1, 2, 3
+                                       close_fds=True)
+        # Check STDERR and see if they are non-empty
+        _, stderr = process.communicate()
+        if stderr:
+            self.logger.critical("talys could not be run: %s", stderr)
         elapsed = time.strftime("%M:%S", time.localtime(time.time() - start))
         info = "{mass}{element}-{name}".format(**keywords) if keywords["name"] else "{mass}{element}".format(**keywords)
         self.counter.value += 1
@@ -890,7 +897,7 @@ class Manager:
             self.logger.error(exc)
             # The filesize of output_file is an indicator of whether the
             # execution was successful or not
-            path = os.path.join(self.work_directory,
+            path = os.path.join(self.rest_directory,
                                 self.reader["output_file"])
             if os.path.getsize(path) < 600:
                 # Execution failed. Open the file and log the output
@@ -907,7 +914,7 @@ class Manager:
 
 # For MPI
 class ChildRunner(Manager):
-    # Remove Manager's init
+    # Replace Manager's init
     def __init__(self, rank):
         self.rank = rank
         self.use_MPI = True
@@ -936,29 +943,37 @@ class ChildRunner(Manager):
                 print("An error occured: ", e)
 
     def run_talys(self, work_directory, result_directory, mass, element, name):
+        """ Runs TALYS
+
+        Parameters: keywords: the input options
+        Algorithm:  call system.fork() to run TALYS, and redirect the system
+                    signals and standard outputs to this python script. Log
+                    any errors and execution time
+        """
+
         shutil.copy("talys", work_directory)
         start = time.time()
         with Cd(work_directory):
-            process = subprocess.Popen('./talys <{}> {}'.format(
-                self.reader["input_file"],
-                self.reader["output_file"]),
+            process = subprocess.Popen("./talys",
                                        # Do not send signals to the subprocess
-                preexec_fn=os.setpgrp,
-                                       # Spawn a shell
-                shell=True,
-                                       # Send both stdout and stderr to pipe.stdout
-                stdout=subprocess.PIPE,
-                                       stderr=subprocess.STDOUT,
-                                       # Don't know
-                close_fds=True)
-        # Get STDOUT and STDERR and see if they are non-empty
-        # (Both are sent to STDOUT)
-        stdout, _ = process.communicate()
-        os.remove(os.path.join(work_directory, "talys"))
-        if stdout:
-            self.errors.append("TALYS could not be run: {}".format(stdout.rstrip()))
-            return 
+                                       preexec_fn=os.setpgrp,
+                                       # Send the input file as stdin
+                                       stdin=open(self.reader["input_file"], "r"),
+                                       # Send stdout to the output file
+                                       stdout=open(self.reader["output_file"], "w"),
+                                       # Errors are sent to stderr
+                                       stderr=subprocess.PIPE,
+                                       # Close all file descriptors except 0, 1, 2, 3
+                                       close_fds=True)
 
+        # Check STDERR and see if they are non-empty
+        _, stderr = process.communicate()
+
+        if stderr:
+            self.errors.append("TALYS could not be run: {}".format(stderr.rstrip()))
+            return
+
+        os.remove(os.path.join(work_directory, "talys"))
         elapsed = time.strftime("%M:%S", time.localtime(time.time() - start))
         info = "{}{}-{}".format(mass, element, name) if name else "{}{}".format(mass, element)
         self.execution_time = "Execution time: {} by {}".format(elapsed, info)
@@ -1034,4 +1049,3 @@ if __name__ == "__main__":
     else:
         # The other processes run TALYS, but must wait for root
         ChildRunner(rank)
-

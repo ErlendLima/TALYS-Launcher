@@ -17,6 +17,7 @@ try:
 except ImportError:
     pass
 
+
 class StyleFormatter(Formatter):
     """ Custom formatter that handles nested field of two levels
         such as '{mass[element]}'. Don't know how it works
@@ -36,10 +37,10 @@ class StyleFormatter(Formatter):
             # Python 2.7
             first, rest = field_name._formatter_field_name_split()
         except:
-            # Python 3 (Only tested oon 3.5)
+            # Python 3 (Only tested on 3.5)
             first, rest = _string.formatter_field_name_split(field_name)
-        #print("First:", first)
-        #print("Kwargs:", kwargs)
+        # print("First:", first)
+        # print("Kwargs:", kwargs)
         # obj = kwargs[field_name] or obj = '' if KeyError
         # ex. obj = {"Pr":128}
         obj = self.get_value(first, args, kwargs)
@@ -182,6 +183,9 @@ def get_args():
                         dest="disable_filters")
     parser.add_argument("--resume",
                         help="Resume from previous checkpoint. Only works with one TALYS-folder",
+                        action="store_true")
+    parser.add_argument("--dummy",
+                        help="Do not run TALYS, only create the directories",
                         action="store_true")
 
     args = parser.parse_args()

@@ -1,9 +1,9 @@
 {
     "script_keywords": {
-        "E1": "0.0025E-03",
+        "energy_start": "0.0025E-03",
         "N": 100,
         "output_file": "output.txt",
-        "E2": "5000E-03",
+        "energy_stop": "5000E-03",
         "comment": " the name of the resulting files that shall be moved to the result directories",
         "input_file": "input.txt",
         "result_files": [
@@ -32,7 +32,7 @@
             "Ce"
         ],
         "preequilibrium": "y",
-        "massmodel": [0,1,2,3],
+        "massmodel": [1,2,3],
         "mass": {
             "Dy": [
                 160,
