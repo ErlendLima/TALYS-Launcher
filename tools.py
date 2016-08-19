@@ -11,6 +11,7 @@ import os
 import logging
 import copy
 import subprocess
+from operator import attrgetter
 from string import Formatter
 
 try:
@@ -191,6 +192,13 @@ def talys_version(local=False):
     else:
         return "unknown"
 
+
+class SortingHelpFormatter(argparse.RawTextHelpFormatter):
+    """ Custom formatter for argparse help """
+    def add_arguments(self, actions):
+        actions = sorted(actions, key=attrgetter('option_strings'))
+        super(SortingHelpFormatter, self).add_arguments(actions)
+
 def get_args():
     """
     Manages the argparse module.
@@ -200,12 +208,14 @@ def get_args():
     Algorithm: Add arguments to argparse.ArgumentParser(), fix some arguments
                regarding logging, and return the parsed arguments.
     """
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--debug",
+    parser = argparse.ArgumentParser(description=("Automates the process of "
+                   "creating and running thousands of simulations with TALYS"),
+                                     formatter_class=SortingHelpFormatter)
+    parser.add_argument("-d", "--debug",
                         help="show debugging information. Overrules log and verbosity",
                         action="store_true")
     parser.add_argument("-l", "--log",
-                        help="set the log level",
+                        help="set the verbosity for the log file",
                         choices=["DEBUG", "INFO",
                                  "WARNING", "ERROR", "CRITICAL"],
                         type=str.upper, default="INFO")
@@ -225,12 +235,14 @@ def get_args():
                         metavar='ERROR_FILENAME',
                         dest="error_filename")
     parser.add_argument("--ifile",
-                        help="the filename for where the options are stored",
+                        help=("the filename for where the options are stored"
+                              "\nDefault is input.json"),
                         type=str, default="structure.json",
                         metavar='INPUT_FILENAME',
                         dest="input_filename")
     parser.add_argument("-p", "--processes",
-                        help=("set the number of processes the script will use. Should be less than or equal to number of CPU cores."
+                        help=("set the number of processes the script will use."
+                        "\nShould be less than or equal to number of CPU cores."
                         "\nIf no N is specified, all available cores are used"),
                         type=int, nargs="?",
                         metavar='N', const=0)
@@ -239,7 +251,8 @@ def get_args():
                         action="store_true",
                         dest="enable_pausing")
     parser.add_argument("--multi",
-                        help="The name of the level at which multiprocessing will be run. Do not use if any parameters vary!!",
+                        help=("the name of the level at which multiprocessing will be run."
+                              "\nThis should only be used if _only_ mass and elements vary"),
                         nargs='+', type=str, default=[])
     parser.add_argument("--default-excepthook",
                         help="use the default excepthook",
@@ -249,11 +262,13 @@ def get_args():
                         help="do not filter log messages",
                         action="store_true",
                         dest="disable_filters")
-    parser.add_argument("--resume",
-                        help="Resume from previous checkpoint. Only works with one TALYS-folder",
+    parser.add_argument("-r", "--resume",
+                        help=("resume from previous checkpoint. If there are"
+                              "\nmore than one TALYS-directory, it will choose"
+                              "\nthe last directory"),
                         action="store_true")
     parser.add_argument("--dummy",
-                        help="Do not run TALYS, only create the directories",
+                        help="for not run TALYS, only create the directories",
                         action="store_true")
 
     args = parser.parse_args()

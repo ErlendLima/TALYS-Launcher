@@ -1,7 +1,8 @@
 #! /usr/bin/python
 """
-Last updated 5th of August 2016
+Last updated 19th of August 2016
 Compatible with both Python 2.7 and Python 3
+
 This script is written to greatly simplify using TALYS. The main features are
 - Assign ranges for the TALYS keywords
 - Create a clean and customisable directory structure
@@ -32,14 +33,22 @@ assigning. An example would be
 #SBATCH --ntasks 64
 mpirun -nooversubscribe -np 50 python talys.py
 
+However, fork() can not be used on a cluster using InfiBand. If you get
+sefaults while running talys, that is probably the reason. A solution to this
+is to use the option --dummy which only creates the directory structure and
+inputfiles. In addition, it creates an "indices" directory containing
+enumerated files pointing to the work directory and result directory of each
+input file. By using array jobs on a cluster, one can iterate through the
+enumerated files and run talys. The files "arrayscript" and "workerscript" show
+an example of this.
+
 TODO: Add failsafe for multiprocessing. Very technically challenging
-TODO: Find talys version. Not technically possible without reverse engineering.
-Look into exe-size
-TODO: Maybe look into os.sched_* for controlling cpy affinity
+TODO: Maybe look into os.sched_* for controlling cpu affinity
 TODO: Unit tests
-##########################################
+
+###############################################################################
 Imports
-##########################################
+###############################################################################
 """
 
 from __future__ import print_function    # Turns print into print()
@@ -59,9 +68,9 @@ from tools import *                      # Functions are put there to remove clu
 from readers import *                    # The input readers
 
 """
-##########################################
+###############################################################################
 Global Variables
-##########################################
+###############################################################################
 """
 Z_nr = {'H':  '001', 'He': '002', 'Li': '003', 'Be': '004', 'B':  '005',
         'C':  '006', 'N':  '007', 'O':  '008', 'F':  '009', 'Ne': '010',
@@ -89,9 +98,9 @@ Z_nr = {'H':  '001', 'He': '002', 'Li': '003', 'Be': '004', 'B':  '005',
         'Lv': '116', 'Uus': '117', 'Uuo': '118'}
 
 """
-###########################################
+###############################################################################
 Functions
-###########################################
+###############################################################################
 """
 
 
@@ -136,7 +145,10 @@ def support_multiprocessing(check_list=False):
             if args[0].use_multiprocessing and do_run:
                 # Only pause if the limit set by --processes is reached
                 if args[0].running_children.value >= args[0].args.processes:
-                    args[0].logger.debug("Waiting for available process")
+                    try:
+                        args[0].logger.debug("Waiting for available process")
+                    except:
+                        pass
                     pid = args[0].queue.get()
                     # Wait a second to let the process be terminated
                     time.sleep(1)
@@ -144,14 +156,21 @@ def support_multiprocessing(check_list=False):
                         if process == pid:
                             # If it did not terminate, wait till it does
                             #process.join()
-                            args[0].logger.debug("Removing %s from list", pid)
+                            try:
+                                args[0].logger.debug("Removing %s from list", pid)
+                            except:
+                                pass
                             # Finally, remove it
                             args[0].mps_list.remove(process)
                             args[0].running_children.value -= 1
                             break
                     if args[0].running_children.value >= args[0].args.processes:
-                        args[0].logger.exception("PID not on list")
-                        raise Exception
+                        try:
+                            args[0].logger.exception("PID not in list")
+                        except:
+                            pass
+                        finally:
+                            raise RuntimeError("PID not in list")
                 args[0].running_children.value += 1
                 job = multiprocessing.Process(
                     target=func,
@@ -167,9 +186,9 @@ def support_multiprocessing(check_list=False):
     return decorator
 
 """
-###########################################
+###############################################################################
 Classes
-###########################################
+###############################################################################
 """
 
 
@@ -860,7 +879,7 @@ class Manager:
         Algorithm:  call system.fork() to run TALYS, and redirect the system
                     signals and standard outputs to this python script. Log
                     any errors and execution time
-p        """
+        """
 
         # Actually run TALYS and time its execution
         start = time.time()
@@ -1006,6 +1025,11 @@ class ChildRunner(Manager):
                     msg = ''.join(output_file.readlines()).rstrip()
                     self.errors.append(msg[1:])
 
+"""
+###############################################################################
+MAIN
+###############################################################################
+"""
 # Keep the script from running if imported as a module
 if __name__ == "__main__":
     try:
