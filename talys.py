@@ -33,8 +33,10 @@ assigning. An example would be
 mpirun -nooversubscribe -np 50 python talys.py
 
 TODO: Add failsafe for multiprocessing. Very technically challenging
-TODO: Find talys version. Not technically possible without reverse engineering
+TODO: Find talys version. Not technically possible without reverse engineering.
+Look into exe-size
 TODO: Maybe look into os.sched_* for controlling cpy affinity
+TODO: Unit tests
 ##########################################
 Imports
 ##########################################
@@ -430,6 +432,9 @@ class Manager:
             "Platform:", padding_size, platform.platform()))
         outfile.write('\n{:<{}s} {}'.format(
             "Python version:", padding_size, platform.python_version()))
+        outfile.write('\n{:<{}s} {}'.format(
+            "Talys version:", padding_size, talys_version(True if self.use_MPI
+                                                          else False)))
 
         # Write energy information
         outfile.write('\n\n{:<{}s} {}'.format(
@@ -459,11 +464,11 @@ class Manager:
             outfile.write('\n{:<{}s} {}' .format(
                 value + ':',  padding_size, key))
 
-        outfile.write('\n\nEnergies: \n')
 
         if "n" in input["astro"] or "no" in input["astro"]:
             self.astro_yes = False
             # Create energy input
+            outfile.write('\n\nEnergies: \n')
             energies = np.linspace(float(self.reader['energy_start']),
                                    float(self.reader['energy_stop']),
                                    float(self.reader['N']))

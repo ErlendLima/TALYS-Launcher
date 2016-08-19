@@ -74,7 +74,12 @@ Further options:
         mpirun -np 50 python talys.py
         ```
         
-
+   Do keep in mind that openMPI does not support fork() over InfiBand.
+   Therefore, running _Talys Launcher_ with mpi over Infiband will most
+   probably lead to memory corruption and segfaults. The solution to this
+   is to use `python talys.py --dummy` which only creates the directory
+   structure and input files. It also creates an "indices" directory containing
+   the directory path
     
 
 ## License

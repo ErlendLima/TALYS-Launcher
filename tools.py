@@ -10,11 +10,14 @@ import sys
 import os
 import logging
 import copy
+import subprocess
 from string import Formatter
 
 try:
+    # Python 3
     import _string
 except ImportError:
+    # Python 2
     pass
 
 
@@ -122,6 +125,71 @@ def make_iterable(dictionary):
                 new_dict[key] = value[0]
     return new_dict
 
+
+def which(program):
+    """ Find path of binary
+
+    Paramteres: program: name of binary
+    Returns:    Path to binary if found, else none
+    Algorithm:  Mimic the UNIX 'which' command
+    """
+    import os
+
+    def is_exe(fpath):
+        return os.path.isfile(fpath) and os.access(fpath, os.X_OK)
+
+    fpath, fname = os.path.split(program)
+    if fpath:
+        if is_exe(program):
+            return program
+    else:
+        for path in os.environ["PATH"].split(os.pathsep):
+            path = path.strip('"')
+            exe_file = os.path.join(path, program)
+            if is_exe(exe_file):
+                return exe_file
+
+    return None
+
+
+def talys_version(local=False):
+    """ Get the version of TALYS being used
+
+    Parameters: local: Wether to use a binary talys file in the current
+                       directory or the system-wide talys
+    Returns:    String of the format #.#
+    Algorithm:  Call shell command "strings" and greps the result
+    """
+    # Find the path of TALYS
+    if local:
+        talys_path = os.path.join(os.getcwd(), "talys")
+    else:
+        talys_path = which("talys")
+    if "talys" not in talys_path:
+        raise RuntimeError("Could not find talys")
+
+    # Use the UNIX command 'strings' to extract all strings from
+    # the binary
+
+    talys18string = "pshiftadjust"
+    talys16string = "fisbaradjust"
+    talys14string = "deuteronomp"
+    talys12string = "gamgamadjust"
+    last_resort_string = "massmodel"
+
+    strings = subprocess.check_output(["strings", talys_path]).decode("utf8")
+    if talys18string in strings:
+        return "1.8"
+    elif talys16string in strings:
+        return "1.6"
+    elif talys14string in strings:
+        return "1.4"
+    elif talys12string in strings:
+        return "1.2"
+    elif last_resort_string in strings:
+        return "1.0"
+    else:
+        return "unknown"
 
 def get_args():
     """
