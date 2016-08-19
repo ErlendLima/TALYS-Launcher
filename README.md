@@ -4,9 +4,11 @@
 |
 <b><a href="#usage">Usage</a></b>
 |
+<b><a href="#the-input-file">The Input File</a></b>
+|
 <b><a href="#multiprocessing">Multiprocessing</a></b>
 |
-<b><a href="support for open mpi">Support for OpenMPI</a></b>
+<b><a href="support-for-open-mpi">Support for OpenMPI</a></b>
 |
 <b><a href="#credits">Credits</a></b>
 |
@@ -18,20 +20,40 @@
 ![](https://img.shields.io/badge/platform-OS%20X%20%7C%20Linux-808080.svg?style=flat-square)
 
 
-_Talys Launcher_ automates the tedious process of writing input files for
+_TALYS Launcher_ automates the tedious process of writing input files for
 [TALYS][talys], running TALYS and organizing the output. The script is written
 in Python, and is compatible with both Python 2.7 and 3+
 
 ## Setup
-Clone this repo with https: `git clone https://github.com/ellenhafli/TALYS-master.git`  
-or with ssh: `git clone git@github.com:ellenhafli/TALYS-master.git`
+Clone this repo with https: 
+```console
+git clone https://github.com/ellenhafli/TALYS-master.git
+```
 
-The only requirement is `numpy`, which can be installed with `pip install numpy`.
+or with ssh: 
+```console
+git clone git@github.com:ellenhafli/TALYS-master.git
+```
+
+The only requirement is `numpy`, which can be installed with 
+```console
+pip install numpy
+```
 If one wishes to use MPI, the package `mpi4py` is also required. All of
-the necessary packages can be installed with `pip install -r requirements`. 
+the necessary packages can be installed with 
+```console
+pip install -r requirements
+```
 
 ## Usage
-To run _talys launcher_ type `python talys.py` in the terminal.  
+To run _TALYS launcher_ type 
+```console 
+python talys.py
+```
+or
+```console
+./talys.py
+```
 
 Further options:
 ```console
@@ -62,6 +84,68 @@ optional arguments:
   -v {DEBUG,INFO,WARNING,ERROR,CRITICAL}, --verbosity {DEBUG,INFO,WARNING,ERROR,CRITICAL}
                         set the verbosity level
 ```
+### The Input File
+The script needs an input file in JSON format containing the TALYS keywords and
+the keywords to the script. A basic input file is shown below
+
+```json
+{    
+    "keywords": {
+        "strength": [1,2,3,4,5,6,7,8],
+        "projectile": "n",
+        "element": [
+            "Ce", "Dy"
+        ],
+        "massmodel": [1,2,3],
+        "mass": {
+            "Ce": [142, 151, 152, 194, 195],
+            "Dy": [160, 162, 163]
+        },
+        "energy": "energies.txt",
+    },
+    "script_keywords": {
+        "energy_start": "0.0025E-03",
+        "N": 100,
+        "output_file": "output.txt",
+        "energy_stop": "5000E-03",
+        "input_file": "input.txt",
+        "result_files": [
+            "astrorate.g",
+            "astrorate.tot"
+        ]
+    },
+    "dependents": {
+        "comment": "The names, such as 'optical', are irrelevant",
+        "Optical":{"localomp":"n", "jlmomp":"y"}
+    },
+    "scissors":{    
+        "Dy": {
+            "160": {
+                "gpr": 1,
+                "spr": 0.47368457989547197,
+                "epr": 2.3921663572847525
+                }
+        } 
+    }    
+}
+```
+The first level consists of four elements which the script interprets differently. The two most
+important are _keywords_ and _script keywords_.
+
+All of the usual TALYS keywords are put in _keywords_ as one would in a TALYS input file. The difference
+is that here one can define ranges which will be iterated over. Should support all possible keywords, ranges and combinations.
+
+The elements in the _script keywords_ describe the names for the files which the script will create, and what energy
+range to use.
+
+The _dependents_ block contains exclusive keyword groups. In the example above, _localomp n_ and _jlmomp y_ will never
+occur in the same input file for TALYS.
+
+The _scissors_ block is a custom block for implentation of "scissors mode" in TALYS. The reason this is a custom block is that the output format is unusual. Instead of writing overly complex code, one can simply add a custom block and some few lines of code into the script to expand its usage.
+
+[Here][input file] is a complete example of an input file.
+
+
 ### Multiprocessing
 TALYS itself does not support multiprocessing, but the script can take
 advantage of the cores on your computer by specifying the option `-p N`, where `N`
@@ -71,7 +155,7 @@ try to use all of the cores available.
 ### Support for [OpenMPI][openmpi]
 Tens of thousands of TALYS-runs can quickly become infeasible on a normal
 desktop computer, instead demanding the computing power of a cluster.
-_Talys Launcer_ supports OpenMPI through the package [mpi4py][mpi4pylink]. To use this
+_TALYS Launcer_ supports OpenMPI through the package [mpi4py][mpi4pylink]. To use this
 feature, simply type `mpirun -np N python talys.py` in the terminal, where
 `N` is the number of cores to be used. Note that standard multiprocessing
 can not be used in conjunction with MPI, and will throw and error if
@@ -92,7 +176,7 @@ mpirun --nooversubscribe -np 50 python talys.py
 A complete example is available [here][jobscript]
         
 Do keep in mind that OpenMPI does not support fork() over InfiBand.
-Therefore, running _Talys Launcher_ with mpi over Infiband will most
+Therefore, running _TALYS Launcher_ with mpi over Infiband will most
 probably lead to memory corruption and segfaults. The solution to this
 is to use `python talys.py --dummy` which only creates the directory
 structure and input files. It also creates an "indices" directory containing
@@ -111,6 +195,7 @@ You can check out the full license [here][license]
 [openmpi]: "https://www.open-mpi.org/"
 [mpi4pylink]: "https://bitbucket.org/mpi4py/mpi4py"
 [license]: LICENSE
+[input file]: structure.json
 [jobscript]: jobscript
 [arrayscript]: arrayscript.sh
 [workerscript]: workerscript.sh
