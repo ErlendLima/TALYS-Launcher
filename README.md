@@ -87,8 +87,9 @@ SLURM, the jobscript would contain
 ```Shell
 #SBATCH -ntasks=64
 ...
-mpirun -np 50 python talys.py
+mpirun --nooversubscribe -np 50 python talys.py
 ```
+A complete example is available [here][jobscript]
         
 Do keep in mind that OpenMPI does not support fork() over InfiBand.
 Therefore, running _Talys Launcher_ with mpi over Infiband will most
@@ -109,6 +110,7 @@ You can check out the full license [here][license]
 [talys]: "https://www.talys.eu"
 [openmpi]: "https://www.open-mpi.org/"
 [mpi4pylink]: "https://bitbucket.org/mpi4py/mpi4py"
-[license]: https://github.com/ellenhafli/TALYS-master/LICENSE
-[arrayscript]: https://github.com/ellenhafli/TALYS-master/arrayscript.sh
-[workerscript]: https://github.com/ellenhafli/TALYS-master/workerscript.sh
+[license]: LICENSE
+[jobscript]: jobscript
+[arrayscript]: arrayscript.sh
+[workerscript]: workerscript.sh
