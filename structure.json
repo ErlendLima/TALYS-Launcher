@@ -11,8 +11,7 @@
             "astrorate.tot"
         ]
     },
-    "comment": "The keywords for the Python script",
-    "conditionals": {
+    "dependents": {
         "comment": "The names, such as 'optical', are irrelevant",
         "Optical":{"localomp":"n", "jlmomp":"y"}
     },
@@ -583,7 +582,7 @@
         "transeps": "1.00E-15",
         "xseps": "1.00E-25"
     },
-    "renameme": {
+    "scissors": {
         "Dy": {
             "160": {
                 "gpr": 1,

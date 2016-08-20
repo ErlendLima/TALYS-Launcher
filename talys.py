@@ -537,6 +537,30 @@ class Manager:
             dst_energy_input = self.rest_directory
             shutil.copy(src_energy_new, dst_energy_input)
 
+    def load_custom_keywords(self, talys_keywords, keywords):
+        """ Load the custom blocks from input file
+
+        Parameters: talys_keywords: the new dict to append keywords to
+                    keywords: the processed keywords from earlier stages
+        Returns:    None
+        Algorithm:  Modifies the keywords-dictionary in place according
+                    to the custom code below. None of these keywords will
+                    appear in the name string
+        """
+        # This is an example showing how to implement scissors mode
+        # by handling epr, gpr and spr
+
+        # Add a criteria for when the custom block will be used
+        # Here, check if the block has any keywords
+        if hasattr(self.reader, "scissors"):
+            # The epr, gpr and spr are mass and element dependent
+            for key, value in self.reader.scissors[keywords["element"]][str(keywords["mass"])].items():
+                # Add the keywords
+                talys_keywords[key] = "{} {} {} M1".format(int(Z_nr[keywords["element"]]),
+                                                           int(keywords["mass"])+1,
+                                                           value)
+
+
     def run(self):
         """ Simple wrapper for self._run()
 
@@ -690,7 +714,6 @@ class Manager:
                               multiprocessing.current_process().pid)
             self.queue.put(multiprocessing.current_process().pid)
 
-
     def run_rest(self, keywords):
         """ Creates the name of the final directory and calls self.run_talys()
 
@@ -699,7 +722,7 @@ class Manager:
         in alphabetical order
         Parameters: keywords: the input options
         Algorithm:  Sort the keywords, combine and iterate over the keywords
-                    and conditionals, set up and handle the multiprocessing,
+                    and dependents, set up and handle the multiprocessing,
                     create the final directory and run self.run_talys()
         """
         if self.args.resume:
@@ -708,7 +731,7 @@ class Manager:
             else:
                 self.logger.debug("Skipping %s-%s", keywords["element"], keywords["mass"])
                 return
-                
+
         # deepcopy the mutable variables to prevent processing mixup
         keywords = copy.deepcopy(keywords)
 
@@ -736,23 +759,19 @@ class Manager:
                 talys_keywords[key] = keywords[key]
         # 1) append the conditional names to the keywords, since they
         # are the one to be chosen from. This is undone in 2)
-        for condition in self.reader.conditionals:
+        for condition in self.reader.dependents:
             values.append(condition.keys())
 
-        # Deal with epr, gpr, spr
-        if len(self.reader.nesteds.keys()) > 0:
-            for key, value in self.reader.nesteds[keywords["element"]][str(keywords["mass"])].items():
-                talys_keywords[key] = "{} {} {} M1".format(int(Z_nr[keywords["element"]]),
-                                                       int(keywords["mass"])+1,
-                                                       value)
+        # Load the keywords from the custom blocks
+        self.load_custom_keywords(talys_keywords, keywords)
 
         # Set the counter to inform the user on the progress
         # It is at this stage that the script knows how many iterations it
         # must do, so the counter_max is set only once - during the first run
         if self.counter_max == 0:
             self.count(values)
-        # current_rank keeps track of how many available ranks there are
-        # send_to_rank stores the rank to which information will be sent
+
+        # Make a checkpoint at the current mass and element
         self.make_checkpoint("{} {}".format(keywords["element"],
                                             keywords["mass"]))
         for value in product(*values):
@@ -818,8 +837,8 @@ class Manager:
                         self.send_to_rank, execution_time, errors = comm.recv(source=MPI.ANY_SOURCE)
                         if execution_time != "null":
                             self.logger.info('(%s/%s) %s', self.counter.value,
-                                         self.counter_max,
-                                         execution_time)
+                                             self.counter_max,
+                                             execution_time)
                         for error in errors:
                             self.logger.error(error)
                         self.counter.value += 1

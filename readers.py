@@ -17,11 +17,9 @@ class Basic_reader(object):
         # Contains the keywords
         self.keywords = {}
         # Contains those keywords that depend on another keyword
-        self.conditionals = []
+        self.dependents = []
         # Contains the keywords related to the script
         self.script_keywords = {}
-        #
-        self.nesteds = {}
 
     def __getitem__(self, index, s=False):
         """ Reader[index] first tries to return Reader.keywords[index]
@@ -42,13 +40,13 @@ class Basic_reader(object):
             return var
 
     def get_condition_val(self, key):
-        """ Return the value for a given key in conditionals
+        """ Return the value for a given key in dependents
         Example:
         >>> A = [{"sheep":2, "cow":1}, {"cat":4}, {"dog":0}]
         >>> print get_condition_val(A, cat)
         4
         """
-        for c in self.conditionals:
+        for c in self.dependents:
             if key in c.keys():
                 return c[key]
 
@@ -70,55 +68,35 @@ class Json_reader(Basic_reader):
         with open(filename) as rFile:
             data = json.load(rFile)
 
-        # fill self.keywords
-        for key, value in data["keywords"].items():
-            if key != "comment":
-                self.keywords[key] = value
-        self.keywords = make_iterable(self.keywords)
-
-        # fill self.conditionals
-        for value in data["conditionals"].values():
-            if isinstance(value, dict):
-                self.conditionals.append(value)
-
-        # fill self.script_keywords
-        for key, value in data["script_keywords"].items():
-            if key != "comment":
-                self.script_keywords[key] = self.convert(value)
-
-        if "nested" in data.keys():
-            for key, value in data["nested"].items():
-                if key != "comment":
-                    self.nesteds[key] = self.convert(value)
-            #self.structure = data["structure"]
-
-
-class Python_reader(Basic_reader):
-    """ Parses input from python file. NB: DOESN'T WORK """
-    def __init__(self, filename):
-        """ Reads the python file and puts the result into the correct
-            variables
-        
-            Parameters: filename: the name of the python file
-            Returns:    None
-            Algorithm:  Call super's init, read the python file, put the
-                        variables into the correct containers
-        """
-        # Call parent's __init__
-        super(Python_reader, self).__init__()
-
-        # Read the python file
-        options = __import__(filename)
-
-        for key, value in talys_options.__dict__.iteritems():
-            # Do not import __name__s
-            if '__' not in key:
-                if 'k_' not in key:
-                    # TALYS keywords
-                    self.keywords[key] = value
-                else:
-                    # Script keywords
-                    self.script_keywords[key[2:]] = value
+        for block in [block for block in data.keys() if isinstance(block, (dict, list, tuple))]:
+            if block == "keywords":
+                # Keywords block
+                for key, value in data[block].items():
+                    if key != "comment":
+                        self.keywords[key] = value
+                self.keywords = make_iterable(self.keywords)
+            elif block == "dependents":
+                # Dependents block
+                for value in data[block].values():
+                    if isinstance(value, dict):
+                        self.dependents.append(value)
+            elif block == "script_keywords":
+                # Script keywords block
+                for key, value in data[block].items():
+                    if key != "comment":
+                        self.script_keywords[key] = self.convert(value)
+            else:
+                # Custom block
+                # Check if the block will be used
+                if "active" in data[block].items():
+                    if data[block]["active"] is False:
+                        continue
+                # Read the block
+                for key, value in data[block].items():
+                    if not hasattr(self, block):
+                        self.__dict__[block] = {}
+                    if key != "comment":
+                        self.scissors[key] = self.convert(value)
 
 
 class BRUSLIB_reader(Basic_reader):
