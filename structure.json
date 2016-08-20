@@ -28,7 +28,7 @@
         "ejectiles": "n g",
         "projectile": "n",
         "element": [
-            "Ce"
+            "Gd"
         ],
         "preequilibrium": "y",
         "massmodel": [1,2,3],
