@@ -583,6 +583,7 @@
         "xseps": "1.00E-25"
     },
     "scissors": {
+        "active": "False",
         "Dy": {
             "160": {
                 "gpr": 1,

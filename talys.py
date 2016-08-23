@@ -63,6 +63,7 @@ import multiprocessing                   # Multiprocessing
 import logging                           # Logging progress from the processes
 import copy                              # For deepcopy
 import traceback                         # To log tracebacks
+import json                              # Write json to the information file
 import subprocess                        # More flexible os.system
 from tools import *                      # Functions are put there to remove clutter
 from readers import *                    # The input readers
@@ -436,9 +437,8 @@ class Manager:
         # Create file
 
         outfile = open(os.path.join(self.root_directory, "information.txt"), 'w')
-        input = self.reader
 
-        # Write date, time and input  to file
+        # Write date, time and self.reader  to file
         outfile.write('TALYS-calculations')
 
         outfile.write('\n{:<{}s} {}'.format(
@@ -457,22 +457,22 @@ class Manager:
 
         # Write energy information
         outfile.write('\n\n{:<{}s} {}'.format(
-            "name of energy file:", padding_size, input['energy'][0]))
+            "name of energy file:", padding_size, self.reader['energy'][0]))
         outfile.write('\n{:<{}s} {}'.format(
-            "energy min:", padding_size, input['energy_start']))
+            "energy min:", padding_size, self.reader['energy_start']))
         outfile.write('\n{:<{}s} {}'.format(
-            "energy max:", padding_size, input['energy_stop']))
+            "energy max:", padding_size, self.reader['energy_stop']))
         outfile.write('\n{:<{}s} {}'.format(
-            "number of energies:", padding_size, input['N']))
+            "number of energies:", padding_size, self.reader['N']))
 
         outfile.write('\n\n{:<{}s} {}'.format(
-            "name of input file:", padding_size, input['input_file']))
+            "name of self.reader file:", padding_size, self.reader['input_file']))
         outfile.write('\n{:<{}s} {}'.format(
-            "name of output file:", padding_size, input['output_file']))
-        outfile.write('\n\nVariable input:')
+            "name of output file:", padding_size, self.reader['output_file']))
+        outfile.write('\n\nVariable self.reader:')
 
         # Write the rest of the keywords
-        for value, key in input.keywords.items():
+        for value, key in self.reader.keywords.items():
             if len(key) == 1:
                 key = key[0]
             elif isinstance(key, (list)):
@@ -484,9 +484,9 @@ class Manager:
                 value + ':',  padding_size, key))
 
 
-        if "n" in input["astro"] or "no" in input["astro"]:
+        if "n" in self.reader["astro"] or "no" in self.reader["astro"]:
             self.astro_yes = False
-            # Create energy input
+            # Create energy self.reader
             outfile.write('\n\nEnergies: \n')
             energies = np.linspace(float(self.reader['energy_start']),
                                    float(self.reader['energy_stop']),
@@ -930,7 +930,7 @@ class Manager:
         try:
             for filename in self.reader["result_files"]:
                 name = "{}-{}".format(keywords["name"], filename) if keywords["name"] else filename
-                shutil.copy(os.path.join(self.work_directory, filename),
+                shutil.copy(os.path.join(self.rest_directory, filename),
                             os.path.join(self.result_directory,
                                          name))
         except Exception as exc:

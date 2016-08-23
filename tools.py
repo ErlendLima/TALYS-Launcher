@@ -116,6 +116,7 @@ def make_iterable(dictionary):
             # if variable == dict => new dict with value only once inside
             # user_input[key]
             for keys, values in value[0].items():
+                print(keys, values)
                 if len(set(values)) != len(values):
                     newlist = []
                     for val in values:

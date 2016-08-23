@@ -68,7 +68,8 @@ class Json_reader(Basic_reader):
         with open(filename) as rFile:
             data = json.load(rFile)
 
-        for block in [block for block in data.keys() if isinstance(block, (dict, list, tuple))]:
+        blocks = [key for key in data.keys() if isinstance(data[key], (dict, list, tuple))]
+        for block in blocks:
             if block == "keywords":
                 # Keywords block
                 for key, value in data[block].items():
@@ -88,15 +89,15 @@ class Json_reader(Basic_reader):
             else:
                 # Custom block
                 # Check if the block will be used
-                if "active" in data[block].items():
-                    if data[block]["active"] is False:
+                if "active" in data[block]:
+                    if data[block]["active"] == "False":
                         continue
                 # Read the block
                 for key, value in data[block].items():
                     if not hasattr(self, block):
                         self.__dict__[block] = {}
                     if key != "comment":
-                        self.scissors[key] = self.convert(value)
+                        self.__dict__[block][key] = self.convert(value)
 
 
 class BRUSLIB_reader(Basic_reader):
