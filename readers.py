@@ -6,6 +6,7 @@ the input from the user.
 from tools import make_iterable
 import json
 
+
 class Basic_reader(object):
     """ A basic reader to build upon """
     def __init__(self):

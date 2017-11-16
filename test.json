@@ -1,15 +1,16 @@
 {    
     "keywords": {
-        "strength": [1,2,3,4,5,6,7,8],
+        "strength": [2,3],
         "projectile": "n",
         "element": [
             "Ce", "Dy"
         ],
-        "massmodel": [1,2,3],
+        "massmodel": [2,3],
         "mass": {
-            "Ce": [142, 151, 152, 194, 195],
-            "Dy": [160, 162, 163]
+            "Ce": [194],
+            "Dy": [162]
         },
+        "astro": "y",
         "energy": "energies.txt"
     },
     "script_keywords": {
@@ -27,7 +28,7 @@
         "comment": "The names, such as 'optical', are irrelevant",
         "Optical":{"localomp":"n", "jlmomp":"y"}
     },
-    "scissors":{    
+    "_scissors":{    
         "Dy": {
             "160": {
                 "gpr": 1,
@@ -35,9 +36,5 @@
                 "epr": 2.3921663572847525
                 }
         } 
-    },
-    "ugly_duckling":{
-        "Ce":[178],
-        "active":"False"
     }
 }

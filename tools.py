@@ -116,7 +116,6 @@ def make_iterable(dictionary):
             # if variable == dict => new dict with value only once inside
             # user_input[key]
             for keys, values in value[0].items():
-                print(keys, values)
                 if len(set(values)) != len(values):
                     newlist = []
                     for val in values:
@@ -167,8 +166,8 @@ def talys_version(local=False):
         talys_path = os.path.join(os.getcwd(), "talys")
     else:
         talys_path = which("talys")
-    if "talys" not in talys_path:
-        raise RuntimeError("Could not find talys")
+    if talys_path is None or "talys" not in talys_path:
+        raise RuntimeError("Could not find talys.")
 
     # Use the UNIX command 'strings' to extract all strings from
     # the binary

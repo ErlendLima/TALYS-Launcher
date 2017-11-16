@@ -10,6 +10,8 @@
 |
 <b><a href="support-for-open-mpi">Support for OpenMPI</a></b>
 |
+<b><a href="example">Example</a></b>
+|
 <b><a href="#credits">Credits</a></b>
 |
 <b><a href="#license">License</a></b>
@@ -183,6 +185,34 @@ structure and input files. It also creates an "indices" directory containing
 enumerated files pointing to the input file and result directory. One can then use
 an array job to run talys. See the files [arrayscript][arrayscript] and 
 [workerscript][workerscript] for an example.
+
+## Example
+Here is an example showing the usage of the script on a single machine without MPI. For this,
+the files `talys`, `talys.py`, `tools.py`, `readers.py` and `structure.json` are required.
+The only file you need to edit is the `structure.json`, which should be thought of as 
+a more advanced input file for TALYS.
+
+The file `structure.json` is, as can be seen, a JSON-file. JSON is easy to read for both humans and machines, and is easy to manipulate using various programming languages. 
+By default, Talys Launcher looks for `structure.json`, but this can be 
+changed to e.g `test.json` by `python talys.py --ifile test.json`. Taking `test.json` as 
+an example, they important sections are `keywords` and `script_keywords`. 
+
+`keywords` are the keywords one would put into TALYS' input file, the difference being
+that the keywords can be either primitives such as in talys, or lists of primitives (a
+primitive is a single value, such as `"strength": 5` or `"localomp": "n"`). If a keyword is
+given as a list, TALYS will be run for each value in the list. For example, `"strength": [1,2,4]`
+results in 3 TALYS runs, while `"strength: [1,2,3]`, `"localomp": ["y", "n"]` results in 
+6.
+
+`script_keywords` is read by TALYS Launcher, and configures the input/output of TALYS which is not controlled by the 
+input file. For example, `"energy_start": "0.0025E-03"`, `"energy_stop": "5000E-03"` and `"N": 100` creates
+an energy file with energies ranging from `energy_start` to `energy_stop` in `N` steps. 
+
+The program can then be run `test.json` using 4 CPU cores by typing
+
+```Shell
+python talys.py --ifile test.json -p 4
+```
 
 ## Credits
 The contributors to this project are Erlend Lima, Ellen Wold Hafli, Ina Kristine Berentsen Kullmann and Ann-Cecilie Larsen.

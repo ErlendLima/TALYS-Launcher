@@ -294,7 +294,7 @@ if __name__ == "__main__":
                         choices=["REACLIB", "BRUSLIB", "EXFOR"],
                         type=str.upper)
     args = parser.parse_args()
-    
+
     if "json" in args.input:
         # If the file is a json-file, parse it as a json file
         write("Reading JSON-file...")

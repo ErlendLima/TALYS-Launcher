@@ -34,7 +34,7 @@ assigning. An example would be
 mpirun -nooversubscribe -np 50 python talys.py
 
 However, fork() can not be used on a cluster using InfiBand. If you get
-sefaults while running talys, that is probably the reason. A solution to this
+segfaults while running talys, this is probably the reason. A solution to this
 is to use the option --dummy which only creates the directory structure and
 inputfiles. In addition, it creates an "indices" directory containing
 enumerated files pointing to the work directory and result directory of each
@@ -182,7 +182,7 @@ def support_multiprocessing(check_list=False):
                 args[0].mps_list.append(job.pid)
             else:
                 func(*args, **kwargs)
-    
+
         return inner
     return decorator
 
@@ -278,7 +278,7 @@ class Manager:
     def __exit__(self, exc_type, exc_value, traceback):
         """ Shut down the children when exiting """
         for rank in range(1, self.mpisize):
-            self.logger.debug("Sending stop to", rank)
+            self.logger.debug("Sending stop to %s", rank)
             comm.send(("stop",)*5, dest=rank)
 
     def count(self, values):
@@ -366,7 +366,7 @@ class Manager:
         if not self.args.disable_filters:
             self.logger.addFilter(NoMultiProcessingFilter())
             self.logger.addFilter(NoMmapFilter())
-    
+
         # File Handler - writes log messages to log file
         log_handle = logging.FileHandler(
             os.path.join(self.root_directory, self.args.log_filename))
@@ -412,7 +412,7 @@ class Manager:
         Parameters: ex_cls: exception class
                     ex: exception instance
                     tb: the traceback
-        Returns:    None
+        Returns:   None
         Algorithm: Log the traceback, terminate any active children and exit
                    the program
         """
@@ -483,7 +483,6 @@ class Manager:
             outfile.write('\n{:<{}s} {}' .format(
                 value + ':',  padding_size, key))
 
-
         if "n" in self.reader["astro"] or "no" in self.reader["astro"]:
             self.astro_yes = False
             # Create energy self.reader
@@ -501,7 +500,7 @@ class Manager:
                 outfile.write('%.2E \n' % Ei)
             outfile_energy.close()
         else:
-            self.astro_yes = True    
+            self.astro_yes = True
 
         outfile.close()
 
@@ -572,13 +571,13 @@ class Manager:
         # Add a criteria for when the custom block will be used
         # Here, check if the block has any keywords
         if hasattr(self.reader, "scissors"):
+            self.logger.info("Using scissors")
             # The epr, gpr and spr are mass and element dependent
             for key, value in self.reader.scissors[keywords["element"]][str(keywords["mass"])].items():
                 # Add the keywords
                 talys_keywords[key] = "{} {} {} M1".format(int(Z_nr[keywords["element"]]),
                                                            int(keywords["mass"])+1,
                                                            value)
-
 
     def run(self):
         """ Simple wrapper for self._run()
@@ -608,7 +607,6 @@ class Manager:
                         self.pausing_queue.put_nowait("pause")
         else:
             self._run()
-            
 
     def _run(self):
         """ Sets up the logging, and creates the root directory
