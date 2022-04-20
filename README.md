@@ -29,12 +29,12 @@ in Python, and is compatible with both Python 2.7 and 3+
 ## Setup
 Clone this repo with https: 
 ```console
-git clone https://github.com/ellenhafli/TALYS-master.git
+git clone https://github.com/ErlendLima/TALYS-Launcher.git
 ```
 
 or with ssh: 
 ```console
-git clone git@github.com:ellenhafli/TALYS-master.git
+git clone git@github.com:ErlendLima/TALYS-Launcher.git
 ```
 
 The only requirement is `numpy`, which can be installed with 
@@ -207,6 +207,7 @@ results in 3 TALYS runs, while `"strength: [1,2,3]`, `"localomp": ["y", "n"]` re
 `script_keywords` is read by TALYS Launcher, and configures the input/output of TALYS which is not controlled by the 
 input file. For example, `"energy_start": "0.0025E-03"`, `"energy_stop": "5000E-03"` and `"N": 100` creates
 an energy file with energies ranging from `energy_start` to `energy_stop` in `N` steps. 
+The keyword `result_files` specifies the files to be copied from the calculation folder to the result folder. The files can be specified as REGEX patterns.
 
 The program can then be run `test.json` using 4 CPU cores by typing
 

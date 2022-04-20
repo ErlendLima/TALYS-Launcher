@@ -67,6 +67,7 @@ import json                              # Write json to the information file
 import subprocess                        # More flexible os.system
 from tools import *                      # Functions are put there to remove clutter
 from readers import *                    # The input readers
+import re                                # Match file patterns
 
 """
 ###############################################################################
@@ -927,10 +928,16 @@ class Manager:
         # TALYS-calculations-date-time/result_files/element/isotope
         try:
             for filename in self.reader["result_files"]:
-                name = "{}-{}".format(keywords["name"], filename) if keywords["name"] else filename
-                shutil.copy(os.path.join(self.rest_directory, filename),
-                            os.path.join(self.result_directory,
-                                         name))
+                pattern = re.compile(filename)
+                files = [file for file in os.listdir(self.rest_directory) if re.match(pattern, file)]
+                if not files:
+                    self.logger.error("Found no files matching %s", filename)
+                for file in files:
+                    fname = "{}-{}".format(keywords['name'], file) if keywords['name'] else file
+                    self.logger.debug("Copying %s to %s", file, fname)
+                    shutil.copy(os.path.join(self.rest_directory, file),
+                                os.path.join(self.result_directory,
+                                            fname))
         except Exception as exc:
             # Give TALYS some time to write the output.txt
             time.sleep(1)
@@ -1023,10 +1030,16 @@ class ChildRunner(Manager):
         # TALYS-calculations-date-time/result_files/element/isotope
         try:
             for filename in self.reader["result_files"]:
-                fname = "{}-{}".format(name, filename) if name else filename
-                shutil.copy(os.path.join(work_directory, filename),
-                            os.path.join(result_directory,
-                                         fname))
+                pattern = re.compile(filename)
+                files = [file for file in os.listdir(work_directory) if re.match(pattern, file)]
+                if not files:
+                    self.logger.error("Found no files matching %s", filename)
+                for file in files:
+                    fname = "{}-{}".format(name, file) if name else file
+                    self.logger.debug("Copying %s to %s", file, fname)
+                    shutil.copy(os.path.join(work_directory, file),
+                                os.path.join(result_directory,
+                                            fname))
         except Exception as exc:
             # Give TALYS some time to write the output.txt
             time.sleep(1)
