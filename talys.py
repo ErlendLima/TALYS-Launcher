@@ -484,13 +484,13 @@ class Manager:
             outfile.write('\n{:<{}s} {}' .format(
                 value + ':',  padding_size, key))
 
-        if "n" in self.reader["astro"] or "no" in self.reader["astro"]:
+        if 'astro' not in self.reader.keywords or "n" in self.reader["astro"] or "no" in self.reader["astro"]:
             self.astro_yes = False
             # Create energy self.reader
             outfile.write('\n\nEnergies: \n')
             energies = np.linspace(float(self.reader['energy_start']),
                                    float(self.reader['energy_stop']),
-                                   float(self.reader['N']))
+                                   int(self.reader['N']))
             # Outfile named energy_file
             outfile_energy = open(os.path.join(self.root_directory, self.reader['energy'][0]), 'w')
             # Write energies to energy_file and file in one column
@@ -541,6 +541,27 @@ class Manager:
             outfile_input.write('energy {} \n \n'.format(energy))
         else:
             outfile_input.write('energy 1\n')
+
+        if 'E1file' in keywords:
+            # Expecting the format {'Ce': ['Ce_e1file.dat'], 'Dy': ['talysfyle', '{Z}', '{A}']}
+            Z = int(Z_nr[element])
+            A = int(mass)
+            E1file = keywords.pop('E1file')
+            file, *ZA = E1file.split(" ")
+            if len(ZA) > 2:
+                raise ValueError("Too many arguments in E1file")
+            if len(ZA) > 1:
+                A = ZA[1]
+            if len(ZA) > 0:
+                Z = ZA[0]
+            outfile_input.write('E1file {} {} {}\n'.format(Z, A, file))
+            # Copy the file
+            src = os.path.join(os.path.dirname(self.root_directory), file)
+            dst = self.rest_directory
+            if not os.path.exists(src):
+                raise FileNotFoundError("E1File {} not found".format(src))
+            self.logger.debug("Copying E1file from {} to {}".format(src, dst))
+            shutil.copy(src, dst)
 
         # Write the keyword and corresponding value
         for key, value in keywords.items():
@@ -762,19 +783,22 @@ class Manager:
         talys_keywords = {}
 
         # Put the keys in alphabetical order
-        sorted_keys = list(keywords.keys())
-        sorted_keys.sort()
-        for key in sorted_keys:
+        for key, val in sorted(keywords.items()):
+            # Resolve keys that are dependent on other keys
+            if isinstance(val, dict):
+                val = val[keywords['element']]
+                if isinstance(val, str):
+                    Z = int(Z_nr[keywords['element']])
+                    A = int(keywords['mass'])
+                    val = val.format(element=keywords['element'], Z=Z, A=A, mass=keywords['mass'])
             # Only use keywords that vary, and astro
-            if (len(self.reader[key]) > 1
-                and key != "element"
-                and key != "mass"):
+            if isinstance(val, (tuple, list)) and key not in ("element", "mass"):
                 # the next two lists are in alphabetical order, and
                 # corresponding key-value pair have the same index
                 keys.append(key)
-                values.append(keywords[key])
+                values.append(val)
             else:
-                talys_keywords[key] = keywords[key]
+                talys_keywords[key] = val
         # 1) append the conditional names to the keywords, since they
         # are the one to be chosen from. This is undone in 2)
         for condition in self.reader.dependents:

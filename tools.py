@@ -97,7 +97,7 @@ def make_iterable(dictionary):
     new_dict = copy.deepcopy(dictionary)
 
     for key in dictionary:
-        if not isinstance(dictionary[key], (tuple, list)):
+        if not isinstance(dictionary[key], (tuple, list, dict, set)):
             new_dict[key] = [new_dict[key]]
 
     # check if every item in user given list is unique

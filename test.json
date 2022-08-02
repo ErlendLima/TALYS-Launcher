@@ -1,27 +1,29 @@
 {    
     "keywords": {
-        "strength": [2,3],
+        "strength": [2],
         "projectile": "n",
         "element": [
-            "Ce", "Dy"
+            "Sc", "Ti"
         ],
-        "massmodel": [2,3],
+        "massmodel": [2],
         "mass": {
-            "Ce": [194],
-            "Dy": [162]
+            "Sc": [45],
+            "Ti": [50]
         },
         "astro": "y",
-        "energy": "energies.txt"
+        "energy": "energies.txt",
+        "filedensity": "y"
     },
     "script_keywords": {
         "energy_start": "0.0025E-03",
         "N": 100,
         "output_file": "output.txt",
-        "energy_stop": "5000E-03",
+        "energy_stop": "3000E-03",
         "input_file": "input.txt",
         "result_files": [
             "astrorate.g",
-            "astrorate.tot"
+            "astrorate.tot",
+            "ld.*.tot"
         ]
     },
     "dependents": {
